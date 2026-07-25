@@ -35,10 +35,14 @@ you're ready — ask to add it whenever.
       internal recompute trigger
 
 ## Frontend core
-- [ ] Vite + React skeleton, MapLibre GL map component
+- [x] Vite + React (TS) skeleton, MapLibre GL map component (placeholder demo
+      style), backend health-check status badge — verified: both dev servers
+      running locally, `frontend/` builds clean, page loads at
+      `http://localhost:5173`
 - [ ] Four Phase 1 pages: Dashboard, Map, Fire Detail, Reference
 - [ ] Responsive nav (sidebar desktop / bottom tab bar mobile)
-- [ ] Wired to backend via `VITE_API_BASE_URL`
+- [x] Wired to backend via `VITE_API_BASE_URL` (shared root `.env` via Vite's
+      `envDir`)
 
 ## Deploy
 - [ ] Railway: backend + Postgres, usage alerts set ($5 soft / $10 hard)
