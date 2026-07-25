@@ -37,8 +37,13 @@ you're ready — ask to add it whenever.
 ## Frontend core
 - [x] Vite + React (TS) skeleton, MapLibre GL map component (placeholder demo
       style), backend health-check status badge — verified: both dev servers
-      running locally, `frontend/` builds clean, page loads at
-      `http://localhost:5173`
+      running locally, `frontend/` builds clean, map tiles render and badge
+      goes green at `http://localhost:5173` (confirmed in a real browser tab,
+      not just an IDE preview)
+- [x] Fixed a MapLibre GL JS + Vite incompatibility: Vite's dep pre-bundler
+      served MapLibre's web worker with an empty MIME type, browser refused
+      to run it ("WebGL context was lost" / worker blocked). Fixed via
+      `optimizeDeps: { exclude: ['maplibre-gl'] }` in `vite.config.ts`
 - [ ] Four Phase 1 pages: Dashboard, Map, Fire Detail, Reference
 - [ ] Responsive nav (sidebar desktop / bottom tab bar mobile)
 - [x] Wired to backend via `VITE_API_BASE_URL` (shared root `.env` via Vite's
