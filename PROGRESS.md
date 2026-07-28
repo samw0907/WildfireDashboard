@@ -30,8 +30,16 @@ you're ready — ask to add it whenever.
       ever needed). `fires`, `building_cache`, `exposure_stats`,
       `ingestion_status` tables live on Railway Postgres now, verified via
       schema inspection incl. `ON DELETE CASCADE` on both FKs
-- [ ] NIFC WFIGS ingestion job (15-min cadence) + scheduled prune job
-      (NIFC's own fall-off thresholds: <10ac/3d, 10-100ac/8d)
+- [x] NIFC WFIGS ingestion job (15-min cadence, asyncio background loop in
+      the FastAPI lifespan - no extra scheduler dependency) + prune job
+      (NIFC's own fall-off thresholds: <10ac/3d, 10-100ac/8d). Verified
+      endpoint: `WFIGS_Interagency_Perimeters_Current` FeatureServer
+      (resolved from the ArcGIS Hub dataset item, not guessed - NIFC had
+      restructured this since the original plan was written). Live test:
+      201 of 210 current fires ingested into Railway Postgres, paginated
+      correctly (200/page), `/health` stayed responsive throughout (runs in
+      a thread, doesn't block the event loop), `ingestion_status` recording
+      success/failure per cycle as designed
 - [ ] Exposure computation: one Overpass call per fire (2400m band) +
       WorldPop hosted stats API calls per band; recompute only on new fire /
       material perimeter change / staleness fallback — never on every

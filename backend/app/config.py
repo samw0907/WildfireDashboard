@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     database_url: str | None = None
     database_public_url: str | None = None
 
+    nifc_ingestion_interval_minutes: int = 15
+    exposure_staleness_hours: int = 24
+
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore")
 
     @property
