@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { getFire, type FireDetail as FireDetailData } from '../api'
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
+import { BuildingIcon, PeopleIcon } from '../components/icons'
 
 const BANDS = [500, 1000, 2400]
 
@@ -52,13 +53,14 @@ export function FireDetail() {
               <div key={band} className="exposure-band">
                 <h3>{band}m buffer</h3>
                 <div className="stat-row">
-                  <StatCard label="Buildings" value={stat.building_count ?? '—'} />
+                  <StatCard label="Buildings" value={stat.building_count ?? '—'} icon={BuildingIcon} />
                   <StatCard
                     label="Population est."
                     value={
                       stat.population_est != null ? Math.round(stat.population_est).toLocaleString() : 'Pending'
                     }
                     accent="orange"
+                    icon={PeopleIcon}
                   />
                 </div>
                 <p className="computed-at">Computed {new Date(stat.computed_at).toLocaleString()}</p>

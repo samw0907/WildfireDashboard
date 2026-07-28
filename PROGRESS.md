@@ -101,6 +101,10 @@ behind anything marked as a real choice, not just what got built.
       respond with the dev server up
 - [x] Responsive nav: sidebar (desktop) collapses to a bottom tab bar under
       768px, per the mobile-friendly requirement
+- [x] Styling pass matching TAFP screenshots (roughly, not a clone): boxed
+      nav active-state with icons, icon-circle stat cards, pill-shaped
+      sun/moon theme toggle — small hand-rolled SVG icon set, no icon
+      library dependency added
 - [x] Wired to backend via `VITE_API_BASE_URL` (shared root `.env` via Vite's
       `envDir`)
 

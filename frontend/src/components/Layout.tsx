@@ -1,14 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTheme } from '../useTheme'
+import { DashboardIcon, MapIcon, ReferenceIcon, FlameIcon, SunIcon, MoonIcon } from './icons'
 
 // Fire Detail is reached by selecting a fire from Dashboard/Map (route
 // /fires/:id), not a standalone nav link with no fire selected - that would
 // be a nav item with nowhere real to go, which is exactly the dead-end
 // pattern this project deliberately avoids.
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/map', label: 'Map' },
-  { to: '/reference', label: 'Reference' },
+  { to: '/', label: 'Dashboard', Icon: DashboardIcon },
+  { to: '/map', label: 'Map', Icon: MapIcon },
+  { to: '/reference', label: 'Reference', Icon: ReferenceIcon },
 ]
 
 export function Layout() {
@@ -17,16 +18,22 @@ export function Layout() {
   return (
     <div className="layout">
       <aside className="sidebar">
-        <div className="sidebar-logo">WildfireDashboard</div>
+        <div className="sidebar-logo">
+          <span className="sidebar-logo-icon">
+            <FlameIcon />
+          </span>
+          WildfireDashboard
+        </div>
         <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.map(({ to, label, Icon }) => (
             <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
+              key={to}
+              to={to}
+              end={to === '/'}
               className={({ isActive }) => 'nav-item' + (isActive ? ' nav-item--active' : '')}
             >
-              {item.label}
+              <Icon />
+              <span>{label}</span>
             </NavLink>
           ))}
         </nav>
@@ -34,9 +41,14 @@ export function Layout() {
 
       <div className="main">
         <header className="topbar">
-          <span className="eyebrow">Portfolio demo — not an operational tool</span>
-          <button className="theme-toggle" onClick={toggle}>
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          <span className="eyebrow">Wildfire exposure dashboard — portfolio demo, not an operational tool</span>
+          <button className="theme-toggle" onClick={toggle} aria-label="Toggle color theme">
+            <span className={theme === 'light' ? 'theme-toggle-active' : ''}>
+              <SunIcon />
+            </span>
+            <span className={theme === 'dark' ? 'theme-toggle-active' : ''}>
+              <MoonIcon />
+            </span>
           </button>
         </header>
         <main className="content">
@@ -45,14 +57,15 @@ export function Layout() {
       </div>
 
       <nav className="bottom-tabs">
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.map(({ to, label, Icon }) => (
           <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/'}
+            key={to}
+            to={to}
+            end={to === '/'}
             className={({ isActive }) => 'bottom-tab' + (isActive ? ' bottom-tab--active' : '')}
           >
-            {item.label}
+            <Icon />
+            <span>{label}</span>
           </NavLink>
         ))}
       </nav>

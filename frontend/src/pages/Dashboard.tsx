@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { listFires, exposureAtBand, type Fire } from '../api'
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
+import { FlameIcon, AreaIcon } from '../components/icons'
 
 export function Dashboard() {
   const [fires, setFires] = useState<Fire[] | null>(null)
@@ -32,8 +33,13 @@ export function Dashboard() {
       <p className="page-subtitle">Current US wildfire perimeters, sourced from NIFC WFIGS</p>
 
       <div className="stat-row">
-        <StatCard label="Active fires tracked" value={fires.length} />
-        <StatCard label="Total acres" value={Math.round(totalAcres).toLocaleString()} accent="orange" />
+        <StatCard label="Active fires tracked" value={fires.length} icon={FlameIcon} />
+        <StatCard
+          label="Total acres"
+          value={Math.round(totalAcres).toLocaleString()}
+          accent="orange"
+          icon={AreaIcon}
+        />
       </div>
 
       <div className="dashboard-split">

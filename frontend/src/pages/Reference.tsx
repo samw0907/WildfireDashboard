@@ -1,4 +1,5 @@
 import { StatCard } from '../components/StatCard'
+import { AreaIcon } from '../components/icons'
 
 export function Reference() {
   return (
@@ -51,9 +52,15 @@ export function Reference() {
       <section>
         <h2>Buffer distances</h2>
         <div className="stat-row">
-          <StatCard label="Common ('mode') buffer" value="500" unit="m" />
-          <StatCard label="Mid-tier buffer" value="1,000" unit="m" />
-          <StatCard label="CA Fire Alliance firebrand distance" value="2,400" unit="m" accent="orange" />
+          <StatCard label="Common ('mode') buffer" value="500" unit="m" icon={AreaIcon} />
+          <StatCard label="Mid-tier buffer" value="1,000" unit="m" icon={AreaIcon} />
+          <StatCard
+            label="CA Fire Alliance firebrand distance"
+            value="2,400"
+            unit="m"
+            accent="orange"
+            icon={AreaIcon}
+          />
         </div>
         <p>
           These bands come from a review of wildfire community-asset-protection buffer studies
