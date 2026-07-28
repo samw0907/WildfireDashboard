@@ -23,8 +23,13 @@ you're ready — ask to add it whenever.
 ## Backend core
 - [x] FastAPI skeleton + `/health` endpoint + `requirements.txt` — verified locally,
       returns `{"status":"ok"}` (`backend/app/main.py`, `backend/app/config.py`)
-- [ ] Database schema + Alembic migrations (confirm PostGIS support on Railway
-      Postgres first; fall back to JSONB + shapely if unavailable)
+- [x] Database schema + Alembic migrations — PostGIS confirmed available on
+      Railway Postgres, but decided against it: JSONB + shapely chosen
+      instead (matches existing portfolio pattern, volume never justifies
+      PostGIS's spatial indexing at Phase 1 scale, additive to add later if
+      ever needed). `fires`, `building_cache`, `exposure_stats`,
+      `ingestion_status` tables live on Railway Postgres now, verified via
+      schema inspection incl. `ON DELETE CASCADE` on both FKs
 - [ ] NIFC WFIGS ingestion job (15-min cadence) + scheduled prune job
       (NIFC's own fall-off thresholds: <10ac/3d, 10-100ac/8d)
 - [ ] Exposure computation: one Overpass call per fire (2400m band) +
@@ -50,7 +55,8 @@ you're ready — ask to add it whenever.
       `envDir`)
 
 ## Deploy
-- [ ] Railway: backend + Postgres, usage alerts set ($5 soft / $10 hard)
+- [x] Railway: Postgres provisioned, usage limits set ($5 soft alert / $10 hard cap)
+- [ ] Railway: backend app itself deployed as a service (DB only so far)
 - [ ] AWS: S3 + CloudFront, budget alerts ($5 / $10)
 - [ ] Custom domain: Route53 + ACM cert wired to CloudFront
 - [ ] External uptime monitor on `/health`
