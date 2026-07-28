@@ -1,7 +1,8 @@
 # WildfireDashboard — Build Progress
 
 Running checklist for Phase 1, kept up to date as we go. Not committed until
-you're ready — ask to add it whenever.
+you're ready — ask to add it whenever. See `DECISIONS.md` for the reasoning
+behind anything marked as a real choice, not just what got built.
 
 ## Planning
 - [x] Reviewed scope + CLAUDE.md docs, resolved open gaps (2026-07-25)
@@ -40,10 +41,34 @@ you're ready — ask to add it whenever.
       correctly (200/page), `/health` stayed responsive throughout (runs in
       a thread, doesn't block the event loop), `ingestion_status` recording
       success/failure per cycle as designed
-- [ ] Exposure computation: one Overpass call per fire (2400m band) +
-      WorldPop hosted stats API calls per band; recompute only on new fire /
-      material perimeter change / staleness fallback — never on every
-      ingestion cycle
+- [x] Exposure computation: one Overpass fetch per fire (bbox query around
+      the 2400m buffer, exact containment filtered locally in shapely —
+      decided over a direct polygon-filter query, which risks oversized
+      queries on complex fire perimeters). Buffer bands (500/1000/2400m)
+      derived locally from that single fetch. Recompute decoupled from
+      ingestion cadence: only runs for new/changed/stale fires
+      (`fires_needing_recompute`), not every cycle.
+  - [x] Discovered live during testing: Overpass's public instance needs an
+        identifying `User-Agent` header (bare 406 without one) and is
+        prone to real overload (504s, 429s) - confirmed by hand, not
+        hypothetical. Decided: no retry, log and skip, let the next
+        scheduled cycle pick a failed fire back up - avoids piling onto an
+        already-struggling free service. Added a 2s politeness delay
+        between requests too.
+  - [ ] WorldPop hosted stats API — no key needed for normal use (confirmed:
+        it's optional, for "larger queries and special functionality" only,
+        no self-serve key registration exists anyway). But live-tested and
+        found the task queue genuinely stuck (`"status":"created"` for 45+s
+        with a server-side PHP warning, using WorldPop's own documented
+        request format exactly) - see `DECISIONS.md`. Plan: retry later,
+        keep the hosted-API approach for now; self-hosted-raster fallback
+        stays on the table if this proves persistent, with a cost
+        reassessment against Phase 1's US-only scope if we get there.
+        `population_est` stays NULL until this is confirmed working.
+  - Verified live: buildings fetched and stored in `building_cache`,
+    `exposure_stats` rows written with real building counts (0 for two
+    remote test fires — plausible, not yet confirmed against a
+    building-dense area)
 - [ ] API endpoints: `GET /api/fires`, `GET /api/fires/{id}`, API-key-gated
       internal recompute trigger
 

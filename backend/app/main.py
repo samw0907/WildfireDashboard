@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
+from .exposure import run_exposure_cycle
 from .ingestion import run_ingestion_cycle
 
 logging.basicConfig(level=logging.INFO)
@@ -27,11 +28,26 @@ async def _ingestion_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def _exposure_loop() -> None:
+    # Same polling cadence as ingestion - cheap when there's nothing to do,
+    # since fires_needing_recompute() only does real (Overpass) work for
+    # fires that are new, changed, or past the staleness fallback.
+    interval_seconds = settings.nifc_ingestion_interval_minutes * 60
+    while True:
+        try:
+            await asyncio.to_thread(run_exposure_cycle)
+        except Exception:
+            logger.exception("Unexpected error in exposure loop")
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_ingestion_loop())
+    ingestion_task = asyncio.create_task(_ingestion_loop())
+    exposure_task = asyncio.create_task(_exposure_loop())
     yield
-    task.cancel()
+    ingestion_task.cancel()
+    exposure_task.cancel()
 
 
 app = FastAPI(title="WildfireDashboard API", lifespan=lifespan)

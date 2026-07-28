@@ -6,3 +6,5 @@ sqlalchemy
 alembic
 psycopg2-binary
 httpx
+shapely
+pyproj
