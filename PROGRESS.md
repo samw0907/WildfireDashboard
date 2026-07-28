@@ -89,8 +89,18 @@ behind anything marked as a real choice, not just what got built.
       served MapLibre's web worker with an empty MIME type, browser refused
       to run it ("WebGL context was lost" / worker blocked). Fixed via
       `optimizeDeps: { exclude: ['maplibre-gl'] }` in `vite.config.ts`
-- [ ] Four Phase 1 pages: Dashboard, Map, Fire Detail, Reference
-- [ ] Responsive nav (sidebar desktop / bottom tab bar mobile)
+- [x] Four Phase 1 pages built with real API data: Dashboard (stat cards +
+      map + fire list), Map (full-width), Fire Detail (per-fire map +
+      exposure stats per band, "Pending" shown honestly where
+      population_est is still null), Reference (real sourced citations,
+      no manufactured legitimacy per the anti-TAFP principle). Fire Detail
+      reached via clicking a fire, not a standalone nav link (would be a
+      dead end with no fire selected) - nav has Dashboard/Map/Reference.
+      React Router + a small dark/light theme toggle (localStorage-backed)
+      added. `tsc` build clean; verified `/health` and `/api/fires` both
+      respond with the dev server up
+- [x] Responsive nav: sidebar (desktop) collapses to a bottom tab bar under
+      768px, per the mobile-friendly requirement
 - [x] Wired to backend via `VITE_API_BASE_URL` (shared root `.env` via Vite's
       `envDir`)
 
