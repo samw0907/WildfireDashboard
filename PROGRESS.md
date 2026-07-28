@@ -69,8 +69,15 @@ behind anything marked as a real choice, not just what got built.
     `exposure_stats` rows written with real building counts (0 for two
     remote test fires — plausible, not yet confirmed against a
     building-dense area)
-- [ ] API endpoints: `GET /api/fires`, `GET /api/fires/{id}`, API-key-gated
-      internal recompute trigger
+- [x] API endpoints: `GET /api/fires` (201 fires, full perimeter + latest
+      exposure per band), `GET /api/fires/{id}` (adds cached buildings
+      GeoJSON), `POST /api/fires/{id}/recompute` (API-key-gated, fails
+      closed if no key configured). Bug caught + fixed during testing: the
+      recompute endpoint let an Overpass failure bubble up as a raw 500 -
+      now returns a clean 503 with a message, matching the same "Overpass
+      is unreliable, handle it gracefully" stance as the background loop.
+      Also fixed: `recompute_api_key` was used in code but never actually
+      added to the `Settings` class - caused every auth check to crash.
 
 ## Frontend core
 - [x] Vite + React (TS) skeleton, MapLibre GL map component (placeholder demo

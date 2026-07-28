@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .exposure import run_exposure_cycle
 from .ingestion import run_ingestion_cycle
+from .routers.fires import router as fires_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +59,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(fires_router)
 
 
 @app.get("/health")
