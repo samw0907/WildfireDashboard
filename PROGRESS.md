@@ -101,16 +101,23 @@ behind anything marked as a real choice, not just what got built.
       respond with the dev server up
 - [x] Responsive nav: sidebar (desktop) collapses to a bottom tab bar under
       768px, per the mobile-friendly requirement
-- [x] Styling pass matching TAFP screenshots (roughly, not a clone): boxed
-      nav active-state with icons, icon-circle stat cards, pill-shaped
-      sun/moon theme toggle — small hand-rolled SVG icon set, no icon
-      library dependency added
+- [x] First-pass styling matching TAFP screenshots (roughly, not a clone):
+      boxed nav active-state with icons, icon-circle stat cards,
+      pill-shaped sun/moon theme toggle — small hand-rolled SVG icon set,
+      no icon library dependency added. Confirmed: good enough to carry
+      the visual direction forward, full polish deferred to the end
+      alongside Docker/CI/tests.
 - [x] Wired to backend via `VITE_API_BASE_URL` (shared root `.env` via Vite's
       `envDir`)
 
 ## Deploy
 - [x] Railway: Postgres provisioned, usage limits set ($5 soft alert / $10 hard cap)
-- [ ] Railway: backend app itself deployed as a service (DB only so far)
+- [x] Railway: backend deployed as its own service (root dir `backend`,
+      explicit Custom Start Command since the newer "Railpack" builder's
+      Procfile auto-detection wasn't verified). Live at
+      `wildfiredashboard-production.up.railway.app` — `/health` and
+      `/api/fires` both verified returning real data (201 fires, ingestion
+      ran independently on Railway)
 - [ ] AWS: S3 + CloudFront, budget alerts ($5 / $10)
 - [ ] Custom domain: Route53 + ACM cert wired to CloudFront
 - [ ] External uptime monitor on `/health`
