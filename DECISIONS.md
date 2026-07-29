@@ -70,10 +70,15 @@ considered (assuming global coverage) was almost certainly an
 overestimate. Reassess with that narrower scope in mind rather than
 reusing the original global-size cost intuition.
 
-## Custom domain (2026-07-28)
-**Decision:** Custom domain via Route53 + ACM certificate, rather than the
-default CloudFront URL. Small extra setup and a small annual registration
-cost, judged worth it for a recruiter-facing link.
+## Custom domain (2026-07-28, revisited same day)
+**Original decision:** Custom domain via Route53 + ACM certificate, rather
+than the default CloudFront URL. Small extra setup and a small annual
+registration cost, judged worth it for a recruiter-facing link.
+**Revisited:** No domain currently owned to base a subdomain on, and
+registering a new one now would block frontend deployment on DNS/ACM
+propagation. Deferred to the final polish pass — use the default
+CloudFront URL for now, add the custom domain once everything else is
+running well, for a more professional final look.
 
 ## Fire geometry storage: PostGIS vs. JSONB (2026-07-28)
 **Issue:** PostGIS confirmed available on Railway's managed Postgres (just

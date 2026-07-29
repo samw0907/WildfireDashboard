@@ -118,8 +118,18 @@ behind anything marked as a real choice, not just what got built.
       `wildfiredashboard-production.up.railway.app` — `/health` and
       `/api/fires` both verified returning real data (201 fires, ingestion
       ran independently on Railway)
-- [ ] AWS: S3 + CloudFront, budget alerts ($5 / $10)
-- [ ] Custom domain: Route53 + ACM cert wired to CloudFront
+- [x] AWS: S3 bucket + CloudFront (OAC, default root object, SPA 403/404→
+      index.html error pages), dedicated narrowly-scoped IAM deploy user,
+      manual build+sync+invalidate (CI/CD automation deferred to end).
+      Live at `d3qmrxoydtsnh7.cloudfront.net`, verified root + a client-side
+      route both return 200. Bug caught before user-testing: backend's
+      `CORS_ALLOWED_ORIGINS` only allowed localhost — needs the CloudFront
+      origin added or the deployed frontend can't call the deployed
+      backend (browser-enforced, invisible to curl tests)
+- [ ] AWS budget alerts ($5 / $10) — still to set up
+- [ ] Custom domain: Route53 + ACM cert wired to CloudFront — deferred to
+      the final polish pass (2026-07-28); use default CloudFront URL for
+      now to unblock frontend deployment
 - [ ] External uptime monitor on `/health`
 
 ## Polish (near end of main phase)
