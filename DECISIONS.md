@@ -334,8 +334,11 @@ correctly assessed as beyond a few days' scope. Scoped down instead to a
 ```
 building_index    = 4×(within perimeter) + 3×(500m) + 2×(1,000m) + 1×(2,400m)   [building counts]
 population_index  = 4×(within perimeter) + 3×(500m) + 2×(1,000m) + 1×(2,400m)   [population estimates]
+acreage_index     = log(1 + acres)                                              [log-transformed fire size]
 normalized_x      = x_index / max(x_index across current fire list)             → 0-1 each
-priority_score    = 50 × normalized_building + 50 × normalized_population        → 0-100
+exposure_component = 25×normalized_building + 25×normalized_population           → 0-50
+scale_component    = 50×normalized_acreage                                      → 0-50
+priority_score     = exposure_component + scale_component                       → 0-100
 ```
 Reasoning: closer/more-certain exposure (already inside the perimeter)
 should count for more than distant/possible exposure (2,400m out) —
@@ -344,10 +347,28 @@ matches how both insurance (direct loss) and emergency response
 against the *current* fire list rather than a fixed scale keeps this a
 genuine relative ranking tool (exactly what "pick today's top 1-2" needs)
 and avoids population's naturally larger raw numbers from swamping the
-building signal. Equal 50/50 weighting is a reasonable default, not
-deeply justified — revisit if one signal should dominate more once real
-population data is flowing. Score is null/building-only in effect until
-the Census API key lands (population_index evaluates to 0 for everyone).
+building signal.
+
+**Bug found via live testing, fixed same day (2026-07-29):** the initial
+version (exposure only, no scale term) let a 6-acre fire ("CLARKE") rank
+#2 overall, ahead of fires 1,000x+ larger, purely because it happened to
+sit in a dense area (7,628 buildings within 2.4km - the single highest
+building count of any tracked fire). A small fire's high building count is
+largely an artifact of location, not a sign of real danger, since a small
+perimeter's 2.4km buffer just reflects local density regardless of fire
+behavior - exposure alone wasn't sufficient, fire scale needed to temper
+it. Added the acreage/scale component (log-transformed, since raw acreage
+is heavily right-skewed and a linear scale would let one outlier fire
+dominate the normalization for everyone else) as an equally-weighted
+second pillar. Verified live: CLARKE dropped from #2 to #134 of 230;
+large, genuinely-exposed fires (Aspen Acres, Kaiser Canyon) now correctly
+top the list. The exposure/scale 50/50 split and the internal 25/25
+building/population split are reasonable defaults, not deeply justified —
+revisit if real population data (once the Census key lands) or containment
+percent (a natural further refinement - an uncontained fire is a bigger
+going concern than a mostly-contained one of the same size, though
+`percent_contained` has enough NIFC data gaps to need a null-handling
+strategy before using it) suggest a different balance.
 
 **Access control for the "Confirm & Proceed" action:** the deployed site
 has no authentication at all today — anyone could otherwise trigger a

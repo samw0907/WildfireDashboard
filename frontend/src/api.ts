@@ -1,3 +1,5 @@
+import { clearStoredAdminKey, getOrPromptAdminKey } from './adminKey'
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 export interface ExposureStat {
@@ -38,6 +40,31 @@ export interface IngestionStatus {
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`)
+  if (!res.ok) {
+    throw new Error(`${path} failed: ${res.status}`)
+  }
+  return res.json()
+}
+
+/** For admin-gated endpoints (mark-for-acquisition, confirm & proceed,
+ * etc.) - prompts for the admin key if none is stored yet, and clears it
+ * on a 403 so the next attempt re-prompts rather than looping on a stale
+ * or wrong key. */
+export async function authenticatedRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const key = getOrPromptAdminKey()
+  if (!key) {
+    throw new Error('Admin key required')
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: { ...options.headers, 'x-admin-key': key },
+  })
+
+  if (res.status === 403) {
+    clearStoredAdminKey()
+    throw new Error('Admin key rejected')
+  }
   if (!res.ok) {
     throw new Error(`${path} failed: ${res.status}`)
   }

@@ -196,14 +196,22 @@ reuse audit. Scoped tightly: no automated orbit/scene-selection (assessed
 as a genuine ML/geometry research problem, out of scope) - human-in-the-
 loop scene picking instead.
 
-- [ ] **Priority score**: weighted building/population index (4/3/2/1
-      across perimeter/500m/1000m/2400m bands), normalized against the
-      current fire list, combined 50/50 → 0-100 score. New sortable/
-      filterable table column. No auth needed (read-only ranking).
-- [ ] **Admin-key access gate**: shared-secret prompt (not a full login
+- [x] **Priority score**: two equally-weighted pillars - exposure (25
+      building + 25 population, weighted 4/3/2/1 across perimeter/500m/
+      1000m/2400m bands) + scale (50, log-transformed acreage), each
+      normalized against the current fire list → 0-100 score. New
+      sortable/filterable table column with a color-coded badge. No auth
+      needed (read-only ranking). **Bug found + fixed live (2026-07-29)**:
+      first version (exposure only) let a 6-acre fire outrank fires
+      1,000x+ larger purely from sitting in a dense area - added the
+      acreage/scale pillar, verified the fire dropped from #2 to #134 of
+      230. Full reasoning in `DECISIONS.md`.
+- [x] **Admin-key access gate**: shared-secret prompt (not a full login
       system) for costly actions, same fail-closed pattern as
       `RECOMPUTE_API_KEY`. Key entered once, stored browser-side, sent as
-      a header, validated server-side.
+      a header, validated server-side. Verified: 403/403/200 for no-key/
+      wrong-key/correct-key. Frontend helper built, not yet consumed by a
+      real feature (next up).
 - [ ] **"Mark for acquisition" + live scene picker**: reuse the CDSE
       `search_scene()`-equivalent function from `LAwildfireSAR` to fetch
       real candidate Sentinel-1 scenes (date, track, direction) across a

@@ -74,7 +74,7 @@ def _to_fire_out(fire: Fire, exposure: list[ExposureStat], priority_score: float
 def list_fires(db: Session = Depends(get_db)):
     fires = db.scalars(select(Fire).order_by(Fire.source_updated.desc())).all()
     exposure_by_fire = _latest_exposure_by_fire(db, [f.id for f in fires])
-    scores = compute_priority_scores(exposure_by_fire)
+    scores = compute_priority_scores(list(fires), exposure_by_fire)
     return [_to_fire_out(f, exposure_by_fire.get(f.id, []), scores.get(f.id, 0.0)) for f in fires]
 
 
@@ -85,10 +85,10 @@ def get_fire(fire_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Fire not found")
 
     # Priority score is relative to the whole current fire list (see
-    # priority.py), so this needs every fire's exposure, not just this one's.
-    all_fire_ids = db.scalars(select(Fire.id)).all()
-    exposure_by_fire = _latest_exposure_by_fire(db, list(all_fire_ids))
-    scores = compute_priority_scores(exposure_by_fire)
+    # priority.py), so this needs every fire's data, not just this one's.
+    all_fires = db.scalars(select(Fire)).all()
+    exposure_by_fire = _latest_exposure_by_fire(db, [f.id for f in all_fires])
+    scores = compute_priority_scores(list(all_fires), exposure_by_fire)
 
     cache = db.get(BuildingCache, fire_id)
     buffers = {str(band): mapping(geo.buffer_meters(fire.perimeter, band)) for band in MAP_BUFFER_BANDS}

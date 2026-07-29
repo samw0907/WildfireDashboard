@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     exposure_staleness_hours: int = 24
     recompute_api_key: str | None = None
     census_api_key: str | None = None
+    # Gates frontend-facing admin actions (mark-for-acquisition, confirm &
+    # proceed, etc.) - a shared secret prompted once in the browser, not a
+    # full login system (single operator, no multi-user need). Separate
+    # from recompute_api_key, which is an API-only secret never entered
+    # through the UI.
+    admin_access_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore")
 
