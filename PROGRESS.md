@@ -182,6 +182,26 @@ behind anything marked as a real choice, not just what got built.
     real version (network/isochrone travel-time analysis) is a genuine
     future idea, not a quick add.
 
+## Fire Detail wind + forecast (2026-07-29)
+- [x] `GET /api/fires/{id}/weather` - centroid of the fire's own perimeter
+      (shapely `.centroid`) fed into `api.weather.gov`'s `/points/{lat,lon}`
+      → `/gridpoints/.../forecast` (same free/no-key NWS API as the Red
+      Flag layer). Returns current wind (speed/direction, both as a
+      compass-degrees value for the arrow and the original text for
+      display) plus 10 twelve-hour periods (~5 days: temp, short
+      forecast, wind, precip chance). 30-minute in-process cache per
+      rounded lat/lon, matching the alerts cache pattern.
+- [x] Wind arrow overlaid in the top-right corner of the Fire Detail map -
+      rotated to the direction the wind is blowing *toward* (spread
+      direction), not the raw "from" compass bearing NWS reports, since
+      that's what's actually relevant to fire behavior. Tooltip spells out
+      both directions to avoid ambiguity.
+- [x] Forecast panel below the map/exposure split - horizontally
+      scrollable day/night cards (temp, conditions, wind, precip chance
+      when >0%). Fetched independently from the core fire data and fails
+      silently (no error state) if NWS is unavailable - it's a nice-to-
+      have on top of the exposure story, not core data.
+
 ## Red Flag Warnings layer (2026-07-29)
 - [x] Fetch active NWS alerts (`api.weather.gov/alerts/active`, filtered
       to Red Flag Warning / Fire Weather Watch) - verified live before

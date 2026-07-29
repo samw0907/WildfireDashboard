@@ -36,3 +36,26 @@ class FireDetailOut(FireOut):
     # perimeter, not stored - cheap (milliseconds) and always consistent
     # with the perimeter, so no reason to persist it.
     buffers: dict[str, dict]
+
+
+class WindOut(BaseModel):
+    speed_mph: float | None
+    direction_degrees: float | None
+    direction_text: str | None
+
+
+class ForecastPeriodOut(BaseModel):
+    name: str
+    start_time: datetime
+    is_daytime: bool
+    temperature: int | None
+    temperature_unit: str | None
+    short_forecast: str | None
+    wind_speed: str | None
+    wind_direction: str | None
+    probability_of_precipitation: int | None
+
+
+class FireWeatherOut(BaseModel):
+    wind: WindOut
+    periods: list[ForecastPeriodOut]

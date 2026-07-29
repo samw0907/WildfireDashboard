@@ -47,6 +47,29 @@ export interface FireAlertProperties {
   expires: string | null
 }
 
+export interface WindInfo {
+  speed_mph: number | null
+  direction_degrees: number | null
+  direction_text: string | null
+}
+
+export interface ForecastPeriod {
+  name: string
+  start_time: string
+  is_daytime: boolean
+  temperature: number | null
+  temperature_unit: string | null
+  short_forecast: string | null
+  wind_speed: string | null
+  wind_direction: string | null
+  probability_of_precipitation: number | null
+}
+
+export interface FireWeather {
+  wind: WindInfo
+  periods: ForecastPeriod[]
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`)
   if (!res.ok) {
@@ -94,6 +117,10 @@ export function getIngestionStatus(): Promise<IngestionStatus> {
 
 export function getFireAlerts(): Promise<GeoJSON.FeatureCollection> {
   return get<GeoJSON.FeatureCollection>('/api/alerts')
+}
+
+export function getFireWeather(id: string): Promise<FireWeather> {
+  return get<FireWeather>(`/api/fires/${id}/weather`)
 }
 
 export function exposureAtBand(exposure: ExposureStat[], bufferMeters: number): ExposureStat | undefined {

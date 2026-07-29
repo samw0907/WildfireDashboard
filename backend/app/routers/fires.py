@@ -1,17 +1,21 @@
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
-from shapely.geometry import mapping
+from shapely.geometry import mapping, shape
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import geo, overpass
+from .. import geo, overpass, weather
 from ..config import get_settings
 from ..db import SessionLocal
 from ..exposure import BUFFER_BANDS, compute_exposure_for_fire
 from ..models import BuildingCache, ExposureStat, Fire
 from ..nws import fires_in_active_warnings, get_cached_alerts
 from ..priority import compute_priority_scores
-from ..schemas import ExposureStatOut, FireDetailOut, FireOut
+from ..schemas import ExposureStatOut, FireDetailOut, FireOut, FireWeatherOut, ForecastPeriodOut, WindOut
+
+# Number of 12-hour forecast periods to return - 10 periods (day+night)
+# covers ~5 days, matching what was asked for on the Fire Detail page.
+FORECAST_PERIODS = 10
 
 # Bands worth drawing as a ring on the map - excludes 0 (the perimeter
 # itself, which the frontend already has and renders separately).
@@ -103,6 +107,45 @@ def get_fire(fire_id: str, db: Session = Depends(get_db)):
 
     base = _to_fire_out(fire, exposure_by_fire.get(fire_id, []), scores.get(fire_id, 0.0), fire_id in flagged)
     return FireDetailOut(**base.model_dump(), buildings=cache.buildings if cache else None, buffers=buffers)
+
+
+@router.get("/fires/{fire_id}/weather", response_model=FireWeatherOut)
+def get_fire_weather(fire_id: str, db: Session = Depends(get_db)):
+    fire = db.get(Fire, fire_id)
+    if fire is None:
+        raise HTTPException(status_code=404, detail="Fire not found")
+
+    centroid = shape(fire.perimeter).centroid
+    with httpx.Client(timeout=15.0, headers=weather.HEADERS) as client:
+        periods = weather.fetch_forecast_periods(centroid.y, centroid.x, client)
+
+    if periods is None:
+        raise HTTPException(status_code=503, detail="Weather forecast temporarily unavailable")
+
+    current = periods[0] if periods else None
+    wind = WindOut(
+        speed_mph=weather.parse_wind_speed_mph(current.get("windSpeed")) if current else None,
+        direction_degrees=weather.COMPASS_DEGREES.get(current.get("windDirection", "")) if current else None,
+        direction_text=current.get("windDirection") if current else None,
+    )
+
+    return FireWeatherOut(
+        wind=wind,
+        periods=[
+            ForecastPeriodOut(
+                name=p["name"],
+                start_time=p["startTime"],
+                is_daytime=p["isDaytime"],
+                temperature=p.get("temperature"),
+                temperature_unit=p.get("temperatureUnit"),
+                short_forecast=p.get("shortForecast"),
+                wind_speed=p.get("windSpeed"),
+                wind_direction=p.get("windDirection"),
+                probability_of_precipitation=(p.get("probabilityOfPrecipitation") or {}).get("value"),
+            )
+            for p in periods[:FORECAST_PERIODS]
+        ],
+    )
 
 
 def require_recompute_key(x_api_key: str | None = Header(default=None)) -> None:

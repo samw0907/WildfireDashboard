@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getFire, type FireDetail as FireDetailData } from '../api'
+import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWeather } from '../api'
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
 import { BuildingIcon, PeopleIcon } from '../components/icons'
@@ -19,6 +19,7 @@ export function FireDetail() {
   const { id } = useParams<{ id: string }>()
   const [fire, setFire] = useState<FireDetailData | null>(null)
   const [error, setError] = useState(false)
+  const [weather, setWeather] = useState<FireWeather | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -27,6 +28,16 @@ export function FireDetail() {
     getFire(id)
       .then(setFire)
       .catch(() => setError(true))
+  }, [id])
+
+  useEffect(() => {
+    if (!id) return
+    setWeather(null)
+    // Weather is a nice-to-have, not core exposure data - fail silently
+    // (no error state) and just omit the wind/forecast UI if it's down.
+    getFireWeather(id)
+      .then(setWeather)
+      .catch(() => setWeather(null))
   }, [id])
 
   if (error) {
@@ -65,6 +76,28 @@ export function FireDetail() {
       <div className="fire-detail-split">
         <div className="fire-detail-map">
           <FireMap fires={[fire]} selectedFireId={fire.id} fitToSelection buffers={fire.buffers} />
+          {weather?.wind.direction_degrees != null && (
+            <div
+              className="wind-indicator"
+              title={`Wind from ${weather.wind.direction_text} at ${weather.wind.speed_mph} mph. Arrow points in the direction the wind is blowing toward - the likely fire-spread direction.`}
+            >
+              <svg
+                className="wind-indicator-arrow"
+                viewBox="0 0 24 24"
+                style={{ transform: `rotate(${(weather.wind.direction_degrees + 180) % 360}deg)` }}
+              >
+                <path
+                  d="M12 2 L12 22 M12 2 L6 9 M12 2 L18 9"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span>{weather.wind.speed_mph} mph</span>
+            </div>
+          )}
         </div>
         <div className="exposure-panel">
           <h2>Exposure</h2>
@@ -97,6 +130,33 @@ export function FireDetail() {
           })}
         </div>
       </div>
+
+      {weather && weather.periods.length > 0 && (
+        <div className="forecast-section">
+          <h2>Forecast</h2>
+          <div className="forecast-row">
+            {weather.periods.map((p) => (
+              <div key={p.start_time} className="forecast-card">
+                <div className="forecast-card-name">{p.name}</div>
+                {p.temperature != null && (
+                  <div className="forecast-card-temp">
+                    {p.temperature}&deg;{p.temperature_unit}
+                  </div>
+                )}
+                {p.short_forecast && <div className="forecast-card-desc">{p.short_forecast}</div>}
+                <div className="forecast-card-details">
+                  {p.wind_speed && (
+                    <span>
+                      Wind: {p.wind_direction} {p.wind_speed}
+                    </span>
+                  )}
+                  {!!p.probability_of_precipitation && <span>Precip: {p.probability_of_precipitation}%</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
