@@ -3,7 +3,32 @@ import { useParams, Link } from 'react-router-dom'
 import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWeather } from '../api'
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
-import { BuildingIcon, PeopleIcon } from '../components/icons'
+import {
+  BuildingIcon,
+  PeopleIcon,
+  SunIcon,
+  CloudIcon,
+  RainIcon,
+  ThunderstormIcon,
+  SnowIcon,
+  SmokeIcon,
+  WindIcon,
+} from '../components/icons'
+
+// Ordered most-specific-first: a forecast like "Smoke then Sunny" should
+// read as smoke (the condition someone assessing a wildfire cares about),
+// not sunny, even though "sunny" also matches.
+function forecastIcon(shortForecast: string) {
+  const text = shortForecast.toLowerCase()
+  if (text.includes('thunder')) return ThunderstormIcon
+  if (text.includes('snow') || text.includes('sleet') || text.includes('ice')) return SnowIcon
+  if (text.includes('rain') || text.includes('shower') || text.includes('drizzle')) return RainIcon
+  if (text.includes('smoke') || text.includes('haze') || text.includes('fog')) return SmokeIcon
+  if (text.includes('wind') || text.includes('breezy')) return WindIcon
+  if (text.includes('cloud') || text.includes('overcast')) return CloudIcon
+  if (text.includes('sunny') || text.includes('clear')) return SunIcon
+  return CloudIcon
+}
 
 // Matches the ring colors drawn on the map (see FireMap.tsx) - 0m (the
 // perimeter itself) shares "red" with the 500m band since both represent
@@ -135,29 +160,30 @@ export function FireDetail() {
         <div className="forecast-section">
           <h3>Forecast</h3>
           <div className="forecast-row">
-            {weather.periods.map((p) => (
-              <div key={p.start_time} className="forecast-card">
-                <div className="forecast-card-name">{p.name}</div>
-                {p.temperature != null && (
-                  <div className="forecast-card-temp">
-                    {p.temperature}&deg;{p.temperature_unit}
+            {weather.periods.map((p) => {
+              const Icon = forecastIcon(p.short_forecast ?? '')
+              return (
+                <div key={p.start_time} className="forecast-card" title={p.short_forecast ?? undefined}>
+                  <div className="forecast-card-name">{p.name}</div>
+                  <div className="forecast-card-main">
+                    <Icon />
+                    {p.temperature != null && (
+                      <span className="forecast-card-temp">
+                        {p.temperature}&deg;{p.temperature_unit}
+                      </span>
+                    )}
                   </div>
-                )}
-                {p.short_forecast && (
-                  <div className="forecast-card-desc" title={p.short_forecast}>
-                    {p.short_forecast}
+                  <div className="forecast-card-details">
+                    {p.wind_speed && (
+                      <span>
+                        {p.wind_direction} {p.wind_speed}
+                      </span>
+                    )}
+                    {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
                   </div>
-                )}
-                <div className="forecast-card-details">
-                  {p.wind_speed && (
-                    <span>
-                      {p.wind_direction} {p.wind_speed}
-                    </span>
-                  )}
-                  {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

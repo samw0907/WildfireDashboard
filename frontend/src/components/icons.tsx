@@ -84,6 +84,66 @@ export function MoonIcon() {
   )
 }
 
+export function CloudIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 18a4 4 0 0 1 .3-8 5.5 5.5 0 0 1 10.6.6A3.5 3.5 0 0 1 17 18H7Z" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function RainIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 15a4 4 0 0 1 .3-8 5.5 5.5 0 0 1 10.6.6A3.5 3.5 0 0 1 17 15H7Z" strokeLinejoin="round" strokeLinecap="round" />
+      <path d="M8 18.5 7 20.5M12 18.5l-1 2M16 18.5l-1 2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function ThunderstormIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 14a4 4 0 0 1 .3-8 5.5 5.5 0 0 1 10.6.6A3.5 3.5 0 0 1 17 14H7Z" strokeLinejoin="round" strokeLinecap="round" />
+      <path d="M13 14.5 10 19h3l-1.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function SnowIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M7 14a4 4 0 0 1 .3-8 5.5 5.5 0 0 1 10.6.6A3.5 3.5 0 0 1 17 14H7Z" strokeLinejoin="round" strokeLinecap="round" />
+      <path d="M8 18v4M6.5 19l3 2M6.5 21l3-2M16 18v4M14.5 19l3 2M14.5 21l3-2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// Doubles as the smoke/haze icon (wavy horizontal bands) - the standard
+// "fog" glyph reads equally well for wildfire smoke, which is the far
+// more common case in this app's forecasts.
+export function SmokeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 9c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 14c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 19c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function WindIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path
+        d="M3 8h10a2.5 2.5 0 1 0-2.4-3.2M3 13h13a2.5 2.5 0 1 1-2.4 3.2M3 18h8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function ChevronLeftIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

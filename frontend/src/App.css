@@ -660,39 +660,40 @@
 }
 
 .forecast-card {
-  flex: 0 0 108px;
-  padding: 8px 10px;
+  flex: 0 0 88px;
+  padding: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-elevated);
+  text-align: center;
 }
 
 .forecast-card-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+}
+
+.forecast-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
 }
 
 .forecast-card-temp {
   font-size: 14px;
   font-weight: 700;
-  margin-bottom: 2px;
-}
-
-.forecast-card-desc {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--text);
 }
 
 .forecast-card-details {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 
