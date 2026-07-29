@@ -83,7 +83,7 @@ async function get<T>(path: string): Promise<T> {
  * on a 403 so the next attempt re-prompts rather than looping on a stale
  * or wrong key. */
 export async function authenticatedRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const key = getOrPromptAdminKey()
+  const key = await getOrPromptAdminKey()
   if (!key) {
     throw new Error('Admin key required')
   }

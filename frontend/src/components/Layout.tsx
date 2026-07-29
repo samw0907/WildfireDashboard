@@ -11,6 +11,7 @@ import {
   ChevronLeftIcon,
 } from './icons'
 import { StatusBadge } from './StatusBadge'
+import { AdminKeyModal } from './AdminKeyModal'
 
 // Fire Detail is reached by selecting a fire from Dashboard/Map (route
 // /fires/:id), not a standalone nav link with no fire selected - that would
@@ -94,6 +95,8 @@ export function Layout() {
           </NavLink>
         ))}
       </nav>
+
+      <AdminKeyModal />
     </div>
   )
 }
