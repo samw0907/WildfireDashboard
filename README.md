@@ -47,8 +47,16 @@ estimates are currently `null` — the Census population lookup is built
 and its geometry half is verified live, but the ACS Data API key was only
 just requested and hasn't arrived yet (see `DECISIONS.md`).
 
-Phase 2 (Sentinel-1 SAR confirmation) and Phase 3 (wind/fuel risk) are
-documented but not started.
+Now building toward the project's original point: automatically
+identifying the highest-priority fires (weighted building/population
+score) and, once a human confirms, triggering Sentinel-1 SAR change-
+detection analysis — reusing the core science from a separate existing
+SAR wildfire pipeline (`../LAwildfireSAR`, built for the January 2025 LA
+fires), with human-confirmed scene selection replacing what would
+otherwise be a genuine ML/geometry research problem (automated Sentinel-1
+track/orbit planning). Full design in `DECISIONS.md`.
+
+Phase 3 (wind/fuel risk) remains documented but not started.
 
 ## Local development
 

@@ -225,6 +225,170 @@ MapTiler for the satellite half (confirmed clean free-tier licensing,
 just needs a free API key) - deferred, not because it's a bad idea, just
 lower priority than shipping something solid now.
 
+## Additional data sources reviewed for the "bigger NatCat picture" (2026-07-29)
+Stepped back from feature-by-feature building to ask what else would
+strengthen the exposure-first NatCat story. Reviewed against the same
+honesty/authoritative-source bar as everything else in this project:
+- **NWS Red Flag Warnings** — confirmed real, free, no-key GeoJSON polygons
+  via `api.weather.gov/alerts/active`. **Decision: build it** — fills the
+  "no US equivalent to a danger classification" gap identified all the way
+  back in original planning. Toggleable map layer, same pattern as the
+  buffer rings; the useful derived value is flagging whether a fire's own
+  location currently sits inside an active warning.
+- **Evacuation routes** — **decision: park this, not building it.** No
+  standardized national data source exists for actual evacuation routes
+  (those are decided by local emergency management in real time, not
+  published as open data). The buildable proxy (major OSM highways near a
+  fire, same Overpass pipeline as buildings) was judged not worth adding
+  on its own merits — the basemap already shows roads, so a dedicated
+  layer for the same information add little. The methodologically "real"
+  version (network/isochrone travel-time analysis) is a legitimate bigger
+  undertaking, logged as a future idea, not attempted now.
+- **Smoke / air quality** (NOAA Hazard Mapping System or EPA AirNow) —
+  **added to the backlog, not built yet.** Genuinely extends the
+  exposure-first differentiator in a direction TAFP doesn't touch at all —
+  smoke can expose orders of magnitude more people than anything within a
+  2.4km buffer. Real open data, honestly-statable forecast-vs-observed
+  uncertainty. Queued behind the priority-fire/SAR work below.
+- Reviewed and deprioritized: FEMA National Risk Index (static/county-
+  level, not fire-specific or live), historical fire-frequency layers,
+  parcel-level property values (not available as US open data at all).
+
+## Reference site re-examined: TAFP is FIRMS-detection-based, not perimeter-based (2026-07-29)
+Fetched the live TAFP site (not just the earlier screenshots) to confirm
+what it actually does: NASA FIRMS thermal detections (MODIS/VIIRS) →
+DBSCAN clustering → concave-hull perimeter delineation, refreshed same-day
+per country/province/date-range selection. No exposure, building, or
+population data at all. Confirms the differentiation this project is
+built around (exposure-first, not detection-first) is real, not just a
+claim — the two approaches are complementary (same-day detection vs.
+authoritative-but-slower perimeters), which is worth keeping in mind once
+Phase 2's own Sentinel-1 work starts, since that's where this project
+would start doing detection-adjacent work too.
+
+## Priority-fire identification + SAR acquisition trigger — major scope addition (2026-07-29)
+**Context:** stepping back to the project's original motivation (built off
+the ICEYE GIS Operational Analyst application) — the core idea was never
+just "display exposure stats," it was "identify the highest-priority fires
+for follow-up SAR imagery analysis, for emergency response and insurance
+audiences." This was partially captured in the original plan's "Settings
+page" concept (buffer/population/area thresholds as "the decision layer
+Phase 2's SAR tasking will use") but never actually built. Revisited now
+as a first-class feature, and **reprioritized above the remaining Phase 1
+polish bucket** (custom domain, honesty pass, CI/CD, tests) — this is
+closer to the project's actual point than deployment polish is.
+
+**Existing asset discovered/reused:** a separate already-built SAR
+wildfire pipeline (`c:\Users\swill\dev\LAwildfireSAR`, built for the
+January 2025 LA fires) was audited in depth before designing anything
+here. Findings that shaped every decision below:
+- The core science — CDSE scene search, the pyroSAR/SNAP RTC wrapper,
+  composite alignment, change-detection math — is genuinely reusable as
+  parameterized functions, not LA-specific. Roughly 40-50% of the
+  substantive pipeline carries over close to as-is.
+- The hardest part for a live/automated system — determining which
+  Sentinel-1 track covers an arbitrary AOI and finding a geometrically
+  clean before/after scene pair (the real "Track 137 burst gap → Track 64"
+  fix in that project) — was done entirely by hand via disposable
+  debugging scripts. It does not exist as callable, general code. This is
+  the one part of the whole feature that's a genuine ML/geometry research
+  problem, not an engineering-effort problem.
+- The actual RTC processing takes 4-6 hours per event, needs a full ESA
+  SNAP install, and consumes tens of GB of disk — cannot run on Railway.
+  Needs a separate, ephemeral, heavier compute environment. The existing
+  repo's Dockerfile (Ubuntu + SNAP GPT) is already built for exactly this
+  and is a strong reuse candidate for that compute environment specifically
+  — this does NOT imply the main WildfireDashboard backend needs
+  Dockerizing (see the Docker reassessment entry below).
+
+**Decision: do not attempt automated orbit/scene-selection.** Confirmed
+with the user that even the original LA pipeline's track/date choices
+leaned on AI-assisted human judgment in the moment, not a standing
+algorithm — automating that reasoning is a genuine geometry/ML problem,
+correctly assessed as beyond a few days' scope. Scoped down instead to a
+**human-in-the-loop "mark for acquisition" workflow**:
+- Automatic weighted priority score (below) surfaces the top 1-2 fires
+- A "mark for acquisition" action triggers a *live* CDSE scene search
+  (reusing the confirmed-reusable `search_scene()`-equivalent function)
+  across a sensible pre-fire and post-fire window, returning **real
+  candidate scenes** (date, track/relative orbit, ascending/descending),
+  not blank fields requiring external research
+- Before/after scene pickers shown side by side; selecting a "before"
+  scene filters the "after" list to the same relative orbit/track number
+  where available (falls back to same direction if no same-track after-
+  scene exists yet) — same track guarantees identical viewing geometry,
+  which is what the original project's real bug was actually about, not
+  just "same direction." Confirmed correct by the user, who recalled the
+  ascending/descending constraint from the original project.
+- The human judgment this preserves (avoiding burst-edge/coverage issues)
+  is exactly the part that was never going to be safely automatable
+  anyway — this design keeps that judgment where it belongs rather than
+  pretending it can be removed.
+- Once scenes are human-confirmed, the remaining engineering shrinks back
+  to the genuinely-reusable pipeline code — this is what makes "roughly a
+  week if tightly scoped" a plausible estimate, with the real schedule
+  risk being the ephemeral-compute dispatch mechanism (new infrastructure),
+  not the science.
+
+**Priority scoring formula (built to be explainable, not just computed):**
+```
+building_index    = 4×(within perimeter) + 3×(500m) + 2×(1,000m) + 1×(2,400m)   [building counts]
+population_index  = 4×(within perimeter) + 3×(500m) + 2×(1,000m) + 1×(2,400m)   [population estimates]
+normalized_x      = x_index / max(x_index across current fire list)             → 0-1 each
+priority_score    = 50 × normalized_building + 50 × normalized_population        → 0-100
+```
+Reasoning: closer/more-certain exposure (already inside the perimeter)
+should count for more than distant/possible exposure (2,400m out) —
+matches how both insurance (direct loss) and emergency response
+(immediate danger) would naturally weight it. Normalizing each component
+against the *current* fire list rather than a fixed scale keeps this a
+genuine relative ranking tool (exactly what "pick today's top 1-2" needs)
+and avoids population's naturally larger raw numbers from swamping the
+building signal. Equal 50/50 weighting is a reasonable default, not
+deeply justified — revisit if one signal should dominate more once real
+population data is flowing. Score is null/building-only in effect until
+the Census API key lands (population_index evaluates to 0 for everyone).
+
+**Access control for the "Confirm & Proceed" action:** the deployed site
+has no authentication at all today — anyone could otherwise trigger a
+real-money compute dispatch. **Decision: a single shared admin-key
+prompt, not a full login/user system.** Reasoning: no multi-user need
+exists (single operator), so password hashing/sessions/login pages would
+be real complexity for no benefit over a shared secret. Same fail-closed
+pattern already used for `RECOMPUTE_API_KEY`: the public site stays fully
+open for browsing (matches the portfolio-demo framing), the key is only
+requested when a user reaches a costly action, stored browser-side after
+first entry, sent as a header, validated server-side. **The confirm
+action itself is a hard gate, not just a rate limit or after-the-fact
+email** — nothing dispatches compute until a human clicks it, which is
+stronger protection against overspend (including from a bug) than a
+weekly cap would be. Email notification on a new fire entering the
+priority slot is a reasonable future add but explicitly sequenced after
+the core flow, since it's a new external service dependency (transactional
+email API/account) and not required for the cost-control property itself.
+
+**Compute credentials needed:** the existing LAwildfireSAR pipeline
+already has a CDSE (Copernicus Data Space Ecosystem) account/credentials
+from that project — reuse those rather than creating new ones. Needs
+`CDSE_USER`/`CDSE_PASSWORD` added to this project's env (already
+documented as a Phase 2 placeholder in `.env.example` since the very
+start of this project).
+
+## Docker reassessment (2026-07-29)
+**Issue:** original plan carried over "Dockerize backend" as a generic
+near-end polish item from the existing portfolio's conventions, without
+specifically asking whether it serves a purpose *for this project*.
+**Reassessed:** the main FastAPI backend deploys to Railway successfully
+today without a Dockerfile at all (Railway's own Railpack builder handles
+it directly from `requirements.txt`) — Dockerizing it would add a
+maintenance surface with no corresponding benefit, since there's no
+second deployment target that would need it. **Decision: drop generic
+backend Dockerization from the plan.** Docker still matters, but for a
+different, more specific reason: the SAR compute-dispatch piece above
+needs the *existing* LAwildfireSAR Dockerfile (Ubuntu + ESA SNAP) as the
+ephemeral compute image — that's a real, purpose-built need, not the
+generic "containerize the web backend" task that was originally listed.
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands
@@ -232,6 +396,13 @@ lower priority than shipping something solid now.
 - Present any decision with genuine multiple options and real tradeoffs
   before proceeding, with clear pros/cons; only act unprompted on fixes
   with no realistic alternative (2026-07-28).
-- Docker, CI/CD, and formal test scaffolding deferred to near the end of
-  the main build phase, not built alongside early features (2026-07-25,
-  matches the same pattern already used on SARFloodAnalysis).
+- CI/CD and formal test scaffolding deferred to near the end of the main
+  build phase, not built alongside early features (2026-07-25, matches the
+  same pattern already used on SARFloodAnalysis). Generic backend
+  Dockerization dropped from this list entirely (2026-07-29) — Docker only
+  matters here for the SAR compute-dispatch image, a specific need, not a
+  generic polish task.
+- Priority-fire/SAR acquisition work reprioritized above the remaining
+  Phase 1 polish bucket (custom domain, honesty pass, CI/CD, tests)
+  (2026-07-29) — closer to the project's original point than deployment
+  polish is.

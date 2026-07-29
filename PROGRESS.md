@@ -155,14 +155,75 @@ behind anything marked as a real choice, not just what got built.
       what surfaced the mismatch. Fixed via `@app.api_route("/health",
       methods=["GET", "HEAD"])`
 
-## Polish (near end of main phase)
+## Polish (near end of main phase — now explicitly LOWER priority than the
+## priority-fire/SAR work below, per 2026-07-29 reprioritization)
 - [ ] Honesty/labeling pass (dated/sourced figures, portfolio disclaimer)
-- [ ] Dockerize backend
 - [ ] GitHub Actions CI/CD (lint + test backend, build + S3 sync frontend)
 - [ ] Unit + integration tests
 - [x] README core content written early (not deferred - useful throughout
       the build, not just at the end); final pass once WorldPop/custom
       domain/etc. are resolved to update the "Status" section
+- [x] ~~Dockerize backend~~ — dropped from the plan (2026-07-29): Railway
+      deploys the backend fine without one, no purpose found for it here.
+      Docker still matters, just specifically for the SAR compute image
+      (see below), not the main backend.
+
+## Backlog / future ideas (not started, logged for later)
+- [ ] Smoke / air quality overlay (NOAA HMS smoke or EPA AirNow) - extends
+      exposure-first framing beyond the fire's physical footprint
+- [ ] Satellite imagery basemap toggle (MapTiler), alongside the current
+      OpenFreeMap street style - matches TAFP's own Street/Imagery toggle
+- [ ] Email notification when a new fire enters the priority-acquisition
+      slot (separate from the hard confirm-gate on actually spending money)
+- Explicitly parked, not planned: "evacuation routes" as a labeled feature
+  - no standardized national data source exists for real evacuation
+    routes; the basemap already shows roads, so a dedicated OSM-highways
+    layer wasn't judged worth adding on its own. The methodologically
+    real version (network/isochrone travel-time analysis) is a genuine
+    future idea, not a quick add.
+
+## Red Flag Warnings layer (confirmed, ready to build)
+- [ ] Fetch active NWS alerts (`api.weather.gov/alerts/active`, filtered to
+      Red Flag Warning / Fire Weather Watch), toggleable map layer, same
+      pattern as the buffer rings. Flag whether a fire's own location
+      currently sits inside an active warning - fills the "no US danger
+      classification" gap from original planning.
+
+## Priority-fire identification + SAR acquisition trigger (2026-07-29 —)
+Reprioritized above remaining Phase 1 polish - see `DECISIONS.md` for the
+full reasoning, the priority-score formula, and the LAwildfireSAR pipeline
+reuse audit. Scoped tightly: no automated orbit/scene-selection (assessed
+as a genuine ML/geometry research problem, out of scope) - human-in-the-
+loop scene picking instead.
+
+- [ ] **Priority score**: weighted building/population index (4/3/2/1
+      across perimeter/500m/1000m/2400m bands), normalized against the
+      current fire list, combined 50/50 → 0-100 score. New sortable/
+      filterable table column. No auth needed (read-only ranking).
+- [ ] **Admin-key access gate**: shared-secret prompt (not a full login
+      system) for costly actions, same fail-closed pattern as
+      `RECOMPUTE_API_KEY`. Key entered once, stored browser-side, sent as
+      a header, validated server-side.
+- [ ] **"Mark for acquisition" + live scene picker**: reuse the CDSE
+      `search_scene()`-equivalent function from `LAwildfireSAR` to fetch
+      real candidate Sentinel-1 scenes (date, track, direction) across a
+      pre-fire and post-fire window. Before/after pickers shown side by
+      side; picking a "before" scene filters "after" candidates to the
+      same track number (falls back to same direction). Gated by the
+      admin key.
+- [ ] **Compute dispatch + results display** (deferred design discussion,
+      not started): refactor the pipeline's download/process/composite/
+      change modules to take explicit scene IDs instead of config-file
+      dates; dispatch the existing `LAwildfireSAR` Docker image (Ubuntu +
+      ESA SNAP) to ephemeral cloud compute once scenes are human-
+      confirmed; store results (reusing `sync_to_s3.py`); surface on Fire
+      Detail. Honest schedule read: roughly a week if tightly scoped — the
+      science is largely reusable, the real risk is the ephemeral-compute
+      dispatch mechanism itself (new infrastructure).
+- [ ] Needs `CDSE_USER`/`CDSE_PASSWORD` added to `.env` — reuse the
+      existing LAwildfireSAR project's CDSE account rather than creating
+      a new one (already a documented placeholder in `.env.example` since
+      the start of this project).
 
 ## Buffer visualization + within-perimeter stats + basemap (2026-07-29)
 - [x] Added a 4th "band" (0m = within the fire perimeter itself) to
