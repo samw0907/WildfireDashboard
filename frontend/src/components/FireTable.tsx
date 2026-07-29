@@ -11,9 +11,11 @@ type SortKey =
   | 'buildings'
   | 'population'
   | 'discovered_date'
+  | 'priority_score'
 type SortDirection = 'asc' | 'desc'
 
 const COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'priority_score', label: 'Priority' },
   { key: 'name', label: 'Name' },
   { key: 'state', label: 'State' },
   { key: 'discovered_date', label: 'Discovered' },
@@ -27,6 +29,8 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 
 function getSortValue(fire: Fire, key: SortKey): string | number {
   switch (key) {
+    case 'priority_score':
+      return fire.priority_score
     case 'buildings':
       return exposureAtBand(fire.exposure, 2400)?.building_count ?? -1
     case 'population':
@@ -54,7 +58,7 @@ interface FireTableProps {
 }
 
 export function FireTable({ fires, onSelectFire }: FireTableProps) {
-  const [sortKey, setSortKey] = useState<SortKey>('acres')
+  const [sortKey, setSortKey] = useState<SortKey>('priority_score')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
   const sorted = [...fires].sort((a, b) => {
@@ -93,8 +97,12 @@ export function FireTable({ fires, onSelectFire }: FireTableProps) {
         <tbody>
           {sorted.map((f) => {
             const exp2400 = exposureAtBand(f.exposure, 2400)
+            const priorityTier = f.priority_score >= 50 ? 'red' : f.priority_score >= 20 ? 'orange' : 'neutral'
             return (
               <tr key={f.id} onClick={() => onSelectFire(f.id)}>
+                <td>
+                  <span className={`priority-badge priority-badge--${priorityTier}`}>{f.priority_score}</span>
+                </td>
                 <td>{f.name}</td>
                 <td>{f.state ?? '—'}</td>
                 <td>{f.discovered_date ? new Date(f.discovered_date).toLocaleDateString() : '—'}</td>

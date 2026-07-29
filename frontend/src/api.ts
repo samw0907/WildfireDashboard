@@ -19,6 +19,7 @@ export interface Fire {
   fire_cause: string | null
   complexity_level: string | null
   state: string | null
+  priority_score: number
   exposure: ExposureStat[]
 }
 

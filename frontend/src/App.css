@@ -484,6 +484,31 @@
   color: var(--accent-green);
 }
 
+.priority-badge {
+  display: inline-block;
+  min-width: 34px;
+  text-align: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.priority-badge--red {
+  background: rgba(220, 38, 38, 0.15);
+  color: var(--accent-red);
+}
+
+.priority-badge--orange {
+  background: rgba(249, 115, 22, 0.15);
+  color: var(--accent-orange);
+}
+
+.priority-badge--neutral {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
 .fire-table td {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);

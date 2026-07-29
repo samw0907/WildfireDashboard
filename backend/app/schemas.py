@@ -24,6 +24,7 @@ class FireOut(BaseModel):
     fire_cause: str | None
     complexity_level: str | None
     state: str | None
+    priority_score: float
     exposure: list[ExposureStatOut]
 
 

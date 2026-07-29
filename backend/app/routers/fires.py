@@ -9,6 +9,7 @@ from ..config import get_settings
 from ..db import SessionLocal
 from ..exposure import BUFFER_BANDS, compute_exposure_for_fire
 from ..models import BuildingCache, ExposureStat, Fire
+from ..priority import compute_priority_scores
 from ..schemas import ExposureStatOut, FireDetailOut, FireOut
 
 # Bands worth drawing as a ring on the map - excludes 0 (the perimeter
@@ -51,7 +52,7 @@ def _latest_exposure_by_fire(session: Session, fire_ids: list[str]) -> dict[str,
     return by_fire
 
 
-def _to_fire_out(fire: Fire, exposure: list[ExposureStat]) -> FireOut:
+def _to_fire_out(fire: Fire, exposure: list[ExposureStat], priority_score: float) -> FireOut:
     return FireOut(
         id=fire.id,
         name=fire.name,
@@ -64,6 +65,7 @@ def _to_fire_out(fire: Fire, exposure: list[ExposureStat]) -> FireOut:
         fire_cause=fire.fire_cause,
         complexity_level=fire.complexity_level,
         state=fire.state,
+        priority_score=priority_score,
         exposure=[ExposureStatOut.model_validate(e) for e in exposure],
     )
 
@@ -72,7 +74,8 @@ def _to_fire_out(fire: Fire, exposure: list[ExposureStat]) -> FireOut:
 def list_fires(db: Session = Depends(get_db)):
     fires = db.scalars(select(Fire).order_by(Fire.source_updated.desc())).all()
     exposure_by_fire = _latest_exposure_by_fire(db, [f.id for f in fires])
-    return [_to_fire_out(f, exposure_by_fire.get(f.id, [])) for f in fires]
+    scores = compute_priority_scores(exposure_by_fire)
+    return [_to_fire_out(f, exposure_by_fire.get(f.id, []), scores.get(f.id, 0.0)) for f in fires]
 
 
 @router.get("/fires/{fire_id}", response_model=FireDetailOut)
@@ -81,11 +84,16 @@ def get_fire(fire_id: str, db: Session = Depends(get_db)):
     if fire is None:
         raise HTTPException(status_code=404, detail="Fire not found")
 
-    exposure_by_fire = _latest_exposure_by_fire(db, [fire_id])
+    # Priority score is relative to the whole current fire list (see
+    # priority.py), so this needs every fire's exposure, not just this one's.
+    all_fire_ids = db.scalars(select(Fire.id)).all()
+    exposure_by_fire = _latest_exposure_by_fire(db, list(all_fire_ids))
+    scores = compute_priority_scores(exposure_by_fire)
+
     cache = db.get(BuildingCache, fire_id)
     buffers = {str(band): mapping(geo.buffer_meters(fire.perimeter, band)) for band in MAP_BUFFER_BANDS}
 
-    base = _to_fire_out(fire, exposure_by_fire.get(fire_id, []))
+    base = _to_fire_out(fire, exposure_by_fire.get(fire_id, []), scores.get(fire_id, 0.0))
     return FireDetailOut(**base.model_dump(), buildings=cache.buildings if cache else None, buffers=buffers)
 
 
