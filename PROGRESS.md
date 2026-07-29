@@ -183,6 +183,29 @@ behind anything marked as a real choice, not just what got built.
       frontend redeployed with rings/basemap, no regression on the
       MapLibre worker-file fix from earlier
 
+## Dashboard redesign + new NIFC fields (2026-07-29)
+- [x] Added `percent_contained`, `fire_cause`, `complexity_level`, `state`
+      fields from NIFC (data already available, just wasn't being shown) -
+      new migration, ingestion upsert, API fields
+- [x] Fire Detail: incident badges row (containment %, cause, complexity,
+      days-since-discovery computed client-side)
+- [x] Collapsible sidebar (icon-only rail), state persisted like the theme
+      toggle
+- [x] Map hover feedback: thicker outline highlight (feature-state) + info
+      popup (name/acres/buildings) on hover - researched standard MapLibre
+      patterns first, confirmed applicable, then built
+- [x] Dashboard redesigned: full-width map (taller, 68vh) on top, sortable/
+      filterable data table below (replacing the old side-by-side
+      map+card-list layout) - sort via clickable column headers (no
+      dedicated sort UI), slim filter bar (search/state/cause always
+      visible, "More filters" expandable for complexity/containment-range/
+      acreage-range/population-range) so the default footprint stays slim
+- [x] Population column + filters wired in structurally (2400m band) even
+      though data is still null pending the Census API key - correctly
+      shows "Pending", not blank/zero
+- [x] Removed the old artificial `slice(0, 25)` cap on the fire list, now
+      that filtering is the real way to narrow the full 226-fire set
+
 ## QA pass on the live deployed site (2026-07-29)
 - [x] API 404 handling verified (`/api/fires/does-not-exist` → 404)
 - [x] All SPA client-side routes return 200 (`/`, `/map`, `/reference`,
