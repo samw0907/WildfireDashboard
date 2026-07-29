@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTheme } from '../useTheme'
 import { DashboardIcon, MapIcon, ReferenceIcon, FlameIcon, SunIcon, MoonIcon } from './icons'
+import { StatusBadge } from './StatusBadge'
 
 // Fire Detail is reached by selecting a fire from Dashboard/Map (route
 // /fires/:id), not a standalone nav link with no fire selected - that would
@@ -42,14 +43,17 @@ export function Layout() {
       <div className="main">
         <header className="topbar">
           <span className="eyebrow">Wildfire exposure dashboard — portfolio demo, not an operational tool</span>
-          <button className="theme-toggle" onClick={toggle} aria-label="Toggle color theme">
-            <span className={theme === 'light' ? 'theme-toggle-active' : ''}>
-              <SunIcon />
-            </span>
-            <span className={theme === 'dark' ? 'theme-toggle-active' : ''}>
-              <MoonIcon />
-            </span>
-          </button>
+          <div className="topbar-utility">
+            <StatusBadge />
+            <button className="theme-toggle" onClick={toggle} aria-label="Toggle color theme">
+              <span className={theme === 'light' ? 'theme-toggle-active' : ''}>
+                <SunIcon />
+              </span>
+              <span className={theme === 'dark' ? 'theme-toggle-active' : ''}>
+                <MoonIcon />
+              </span>
+            </button>
+          </div>
         </header>
         <main className="content">
           <Outlet />

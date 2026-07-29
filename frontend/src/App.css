@@ -81,6 +81,52 @@
   color: var(--text-muted);
 }
 
+.topbar-utility {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-pill--live .status-dot {
+  background: var(--accent-green);
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+.status-pill--reconnecting .status-dot {
+  background: var(--accent-orange);
+}
+
+.status-pill--disconnected .status-dot {
+  background: var(--accent-red);
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .theme-toggle {
   display: flex;
   align-items: center;

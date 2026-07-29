@@ -9,6 +9,7 @@ from .config import get_settings
 from .exposure import run_exposure_cycle
 from .ingestion import run_ingestion_cycle
 from .routers.fires import router as fires_router
+from .routers.status import router as status_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ app.add_middleware(
 )
 
 app.include_router(fires_router)
+app.include_router(status_router)
 
 
 @app.api_route("/health", methods=["GET", "HEAD"])

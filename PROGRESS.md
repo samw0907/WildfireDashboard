@@ -141,7 +141,8 @@ behind anything marked as a real choice, not just what got built.
       `CORS_ALLOWED_ORIGINS` only allowed localhost — needs the CloudFront
       origin added or the deployed frontend can't call the deployed
       backend (browser-enforced, invisible to curl tests)
-- [ ] AWS budget alerts ($5 / $10) — still to set up
+- [x] AWS budget alerts set ($1 / $10 — even more conservative than the
+      $5/$10 planned, that's fine), alerts only per the earlier decision
 - [ ] Custom domain: Route53 + ACM cert wired to CloudFront — deferred to
       the final polish pass (2026-07-28); use default CloudFront URL for
       now to unblock frontend deployment
@@ -161,3 +162,22 @@ behind anything marked as a real choice, not just what got built.
 - [x] README core content written early (not deferred - useful throughout
       the build, not just at the end); final pass once WorldPop/custom
       domain/etc. are resolved to update the "Status" section
+
+## QA pass on the live deployed site (2026-07-29)
+- [x] API 404 handling verified (`/api/fires/does-not-exist` → 404)
+- [x] All SPA client-side routes return 200 (`/`, `/map`, `/reference`,
+      `/fires/:id`)
+- [x] Confirmed exposure backfill fully caught up on Railway (224/224
+      fires processed) - the "exposure pending" empty state currently has
+      no live fire to exercise it against, not a bug
+- [x] Real fire's `population_est: null` confirmed rendering as "Pending"
+      correctly, not blank/zero
+- [x] **Gap found and fixed**: the Live/Reconnecting/No-connection status
+      indicator from the original plan never made it into the rebuilt
+      four-page frontend - the early skeleton's simple health-check badge
+      got dropped during the rebuild and was never replaced with the real
+      `ingestion_status`-driven version. Built now: `GET /api/status`
+      (live/reconnecting/disconnected based on last successful ingestion
+      age) + a status pill in the top bar (pulsing green/amber/red),
+      fail-safe to "disconnected" if the backend itself is unreachable.
+      Frontend deployed; backend push still pending as of this note.

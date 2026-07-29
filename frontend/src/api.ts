@@ -22,6 +22,11 @@ export interface FireDetail extends Fire {
   buildings: GeoJSON.FeatureCollection | null
 }
 
+export interface IngestionStatus {
+  status: 'live' | 'reconnecting' | 'disconnected'
+  last_successful_at: string | null
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`)
   if (!res.ok) {
@@ -36,6 +41,10 @@ export function listFires(): Promise<Fire[]> {
 
 export function getFire(id: string): Promise<FireDetail> {
   return get<FireDetail>(`/api/fires/${id}`)
+}
+
+export function getIngestionStatus(): Promise<IngestionStatus> {
+  return get<IngestionStatus>('/api/status')
 }
 
 export function exposureAtBand(exposure: ExposureStat[], bufferMeters: number): ExposureStat | undefined {
