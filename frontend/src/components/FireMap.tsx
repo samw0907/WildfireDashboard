@@ -52,10 +52,13 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Placeholder demo style - swap for a real basemap before shipping
+    // OpenFreeMap "Liberty" style - free, no API key, no rate limit,
+    // OSM-based so roads/streets are clearly visible (useful for the
+    // evacuation-route angle). A satellite imagery toggle (MapTiler) is a
+    // planned follow-up, not built yet - see DECISIONS.md.
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: 'https://demotiles.maplibre.org/style.json',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
       center: [-98.5, 39.8],
       zoom: 3,
     })

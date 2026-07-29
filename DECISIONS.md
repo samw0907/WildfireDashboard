@@ -205,6 +205,26 @@ AWS budget alerts) for a convenience win that matters more once frontend
 changes become less frequent. Confirms the original [[feedback_infra_later]]
 pattern still holds even under real friction, not just in the abstract.
 
+## Basemap (2026-07-29)
+**Issue:** MapLibre placeholder demo style (`demotiles.maplibre.org`) was
+never meant to ship - flagged by the user as looking bare/unfinished
+compared to the TAFP reference screenshots, which include a Street/Imagery
+toggle button on their map.
+**Research before deciding (burned twice already this session by assuming
+API mechanics instead of verifying):** OpenFreeMap confirmed genuinely
+free, no API key, no rate limit, OSM-based vector style - clean, no
+ambiguity. ESRI World Imagery (satellite) has conflicting signals in what
+was found - one source says it's a plain usable tile endpoint, another
+says it requires an ArcGIS Online/Enterprise license and isn't licensed
+for commercial use. Ambiguous enough not to build against without reading
+Esri's actual terms page directly.
+**Decision:** Ship OpenFreeMap's "Liberty" street style now (zero risk,
+zero setup, covers the roads/evacuation-route value directly). **Revisit
+later:** add a Street/Imagery toggle matching TAFP's own pattern, using
+MapTiler for the satellite half (confirmed clean free-tier licensing,
+just needs a free API key) - deferred, not because it's a bad idea, just
+lower priority than shipping something solid now.
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands
