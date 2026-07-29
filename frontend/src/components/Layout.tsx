@@ -1,6 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useTheme } from '../useTheme'
-import { DashboardIcon, MapIcon, ReferenceIcon, FlameIcon, SunIcon, MoonIcon } from './icons'
+import { useSidebarCollapsed } from '../useSidebarCollapsed'
+import {
+  DashboardIcon,
+  MapIcon,
+  ReferenceIcon,
+  FlameIcon,
+  SunIcon,
+  MoonIcon,
+  ChevronLeftIcon,
+} from './icons'
 import { StatusBadge } from './StatusBadge'
 
 // Fire Detail is reached by selecting a fire from Dashboard/Map (route
@@ -15,15 +24,16 @@ const NAV_ITEMS = [
 
 export function Layout() {
   const { theme, toggle } = useTheme()
+  const { collapsed, toggle: toggleSidebar } = useSidebarCollapsed()
 
   return (
-    <div className="layout">
+    <div className={'layout' + (collapsed ? ' layout--collapsed' : '')}>
       <aside className="sidebar">
         <div className="sidebar-logo">
           <span className="sidebar-logo-icon">
             <FlameIcon />
           </span>
-          WildfireDashboard
+          {!collapsed && 'WildfireDashboard'}
         </div>
         <nav className="sidebar-nav">
           {NAV_ITEMS.map(({ to, label, Icon }) => (
@@ -31,13 +41,24 @@ export function Layout() {
               key={to}
               to={to}
               end={to === '/'}
+              title={collapsed ? label : undefined}
               className={({ isActive }) => 'nav-item' + (isActive ? ' nav-item--active' : '')}
             >
               <Icon />
-              <span>{label}</span>
+              {!collapsed && <span>{label}</span>}
             </NavLink>
           ))}
         </nav>
+        <button
+          className="sidebar-collapse-toggle"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <span className={collapsed ? 'sidebar-collapse-icon--flipped' : ''}>
+            <ChevronLeftIcon />
+          </span>
+          {!collapsed && <span>Collapse</span>}
+        </button>
       </aside>
 
       <div className="main">

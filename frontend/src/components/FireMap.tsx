@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { MapLibreMap } from 'maplibre-gl'
+import { MapLibreMap, Popup } from 'maplibre-gl'
 import type { GeoJSONSource, MapLayerMouseEvent } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import type { Fire } from '../api'
+import { exposureAtBand, type Fire } from '../api'
 
 interface FireMapProps {
   fires: Fire[]
@@ -45,9 +45,23 @@ function flattenCoords(geometry: GeoJSON.Geometry): number[][] {
   }
 }
 
+function popupHtml(fire: Fire): string {
+  const exp = exposureAtBand(fire.exposure, 2400)
+  const acres = fire.acres ? `${Math.round(fire.acres).toLocaleString()} ac` : 'Acreage unknown'
+  const buildings = exp?.building_count != null ? `${exp.building_count} buildings within 2.4km` : null
+  return `
+    <div class="map-popup">
+      <strong>${fire.name}</strong>
+      <div>${acres}${buildings ? ` &middot; ${buildings}` : ''}</div>
+    </div>
+  `
+}
+
 export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, buffers }: FireMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
+  const firesRef = useRef<Fire[]>(fires)
+  firesRef.current = fires
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -82,7 +96,14 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
         })
       }
 
-      map.addSource(SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      // promoteId lets feature-state key off our own string fire id
+      // (MapLibre feature-state needs a numeric or string feature id, and
+      // GeoJSON features here don't have a top-level `id` otherwise).
+      map.addSource(SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+        promoteId: 'fireId',
+      })
       map.addLayer({
         id: FILL_LAYER_ID,
         type: 'fill',
@@ -93,19 +114,44 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
         id: LINE_LAYER_ID,
         type: 'line',
         source: SOURCE_ID,
-        paint: { 'line-color': '#dc2626', 'line-width': 1.5 },
+        paint: {
+          'line-color': '#dc2626',
+          'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 3.5, 1.5],
+        },
       })
 
       if (onSelectFire) {
+        let hoveredId: string | undefined
+        const popup = new Popup({ closeButton: false, closeOnClick: false })
+
         map.on('click', FILL_LAYER_ID, (e: MapLayerMouseEvent) => {
           const id = e.features?.[0]?.properties?.fireId
           if (id) onSelectFire(id)
         })
-        map.on('mouseenter', FILL_LAYER_ID, () => {
+
+        map.on('mousemove', FILL_LAYER_ID, (e: MapLayerMouseEvent) => {
           map.getCanvas().style.cursor = 'pointer'
+          const feature = e.features?.[0]
+          const id = feature?.properties?.fireId as string | undefined
+          if (!id) return
+
+          if (hoveredId !== id) {
+            if (hoveredId) map.setFeatureState({ source: SOURCE_ID, id: hoveredId }, { hover: false })
+            hoveredId = id
+            map.setFeatureState({ source: SOURCE_ID, id }, { hover: true })
+
+            const fire = firesRef.current.find((f) => f.id === id)
+            if (fire) popup.setHTML(popupHtml(fire))
+          }
+          popup.setLngLat(e.lngLat)
+          if (!popup.isOpen()) popup.addTo(map)
         })
+
         map.on('mouseleave', FILL_LAYER_ID, () => {
           map.getCanvas().style.cursor = ''
+          if (hoveredId) map.setFeatureState({ source: SOURCE_ID, id: hoveredId }, { hover: false })
+          hoveredId = undefined
+          popup.remove()
         })
       }
     })

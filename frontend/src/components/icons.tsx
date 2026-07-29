@@ -83,3 +83,11 @@ export function MoonIcon() {
     </svg>
   )
 }
+
+export function ChevronLeftIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M15 5 8 12l7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
