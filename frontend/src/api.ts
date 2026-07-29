@@ -20,6 +20,10 @@ export interface Fire {
 
 export interface FireDetail extends Fire {
   buildings: GeoJSON.FeatureCollection | null
+  // Buffer ring polygons keyed by band ("500" | "1000" | "2400"), computed
+  // server-side from the perimeter - excludes "0" (the perimeter itself,
+  // already available as `perimeter` above).
+  buffers: Record<string, GeoJSON.Geometry>
 }
 
 export interface IngestionStatus {

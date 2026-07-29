@@ -4,7 +4,7 @@ interface StatCardProps {
   label: string
   value: string | number
   unit?: string
-  accent?: 'green' | 'orange'
+  accent?: 'green' | 'orange' | 'red' | 'yellow'
   icon?: ComponentType
 }
 

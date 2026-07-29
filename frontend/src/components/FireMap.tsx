@@ -9,11 +9,30 @@ interface FireMapProps {
   selectedFireId?: string
   onSelectFire?: (id: string) => void
   fitToSelection?: boolean
+  // Buffer ring polygons keyed by band ("500" | "1000" | "2400"). Only
+  // meaningful (and only passed) for a single-fire view - rendering these
+  // for every fire on an all-fires map would be imperceptible at that zoom
+  // level and just adds rendering cost.
+  buffers?: Record<string, GeoJSON.Geometry>
 }
 
 const SOURCE_ID = 'fires'
 const FILL_LAYER_ID = 'fires-fill'
 const LINE_LAYER_ID = 'fires-line'
+
+// Outward heat gradient: the closest buffer is most urgent (red, matching
+// the perimeter's own red outline), fading to yellow at the widest band -
+// these are the exact hex values behind --accent-red/orange/yellow, kept
+// in sync manually since MapLibre paint properties can't read CSS
+// variables directly, so the matching stat cards read as the same colors.
+const BUFFER_COLORS: Record<string, string> = {
+  '500': '#dc2626',
+  '1000': '#f97316',
+  '2400': '#eab308',
+}
+// Largest band added first (bottom of stack) so smaller bands draw on top,
+// which is what makes stacked filled disks read as concentric rings.
+const BUFFER_BAND_ORDER = ['2400', '1000', '500']
 
 function flattenCoords(geometry: GeoJSON.Geometry): number[][] {
   switch (geometry.type) {
@@ -26,7 +45,7 @@ function flattenCoords(geometry: GeoJSON.Geometry): number[][] {
   }
 }
 
-export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection }: FireMapProps) {
+export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, buffers }: FireMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
 
@@ -43,6 +62,23 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection }:
     mapRef.current = map
 
     map.on('load', () => {
+      for (const band of BUFFER_BAND_ORDER) {
+        const bandSourceId = `buffer-${band}`
+        map.addSource(bandSourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+        map.addLayer({
+          id: `${bandSourceId}-fill`,
+          type: 'fill',
+          source: bandSourceId,
+          paint: { 'fill-color': BUFFER_COLORS[band], 'fill-opacity': 0.1 },
+        })
+        map.addLayer({
+          id: `${bandSourceId}-line`,
+          type: 'line',
+          source: bandSourceId,
+          paint: { 'line-color': BUFFER_COLORS[band], 'line-width': 1.5, 'line-dasharray': [2, 2] },
+        })
+      }
+
       map.addSource(SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({
         id: FILL_LAYER_ID,
@@ -93,6 +129,17 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection }:
       }
       source.setData(featureCollection)
 
+      for (const band of BUFFER_BAND_ORDER) {
+        const bandSource = map.getSource(`buffer-${band}`) as GeoJSONSource | undefined
+        if (!bandSource) continue
+        const geometry = buffers?.[band]
+        bandSource.setData(
+          geometry
+            ? { type: 'FeatureCollection', features: [{ type: 'Feature', geometry, properties: {} }] }
+            : { type: 'FeatureCollection', features: [] },
+        )
+      }
+
       if (fitToSelection && selectedFireId) {
         const selected = fires.find((f) => f.id === selectedFireId)
         const coords = selected ? flattenCoords(selected.perimeter) : []
@@ -115,7 +162,7 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection }:
     } else {
       map.once('load', updateData)
     }
-  }, [fires, selectedFireId, fitToSelection])
+  }, [fires, selectedFireId, fitToSelection, buffers])
 
   return <div ref={containerRef} className="fire-map" />
 }

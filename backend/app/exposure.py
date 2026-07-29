@@ -86,6 +86,11 @@ def fires_needing_recompute(session: Session) -> list[Fire]:
     fires = session.scalars(select(Fire)).all()
     cache_by_fire = {c.fire_id: c for c in session.scalars(select(BuildingCache)).all()}
 
+    bands_by_fire: dict[str, set[int]] = {}
+    for fire_id, band in session.execute(select(ExposureStat.fire_id, ExposureStat.buffer_meters).distinct()):
+        bands_by_fire.setdefault(fire_id, set()).add(band)
+    required_bands = set(BUFFER_BANDS)
+
     to_recompute = []
     for fire in fires:
         cache = cache_by_fire.get(fire.id)
@@ -94,6 +99,11 @@ def fires_needing_recompute(session: Session) -> list[Fire]:
         elif fire.source_updated > cache.fetched_at:
             to_recompute.append(fire)  # perimeter changed since we last fetched
         elif cache.fetched_at < staleness_cutoff:
+            to_recompute.append(fire)
+        elif not required_bands.issubset(bands_by_fire.get(fire.id, set())):
+            # e.g. a new buffer band (like the 0m "within perimeter" band)
+            # was added to BUFFER_BANDS after this fire was last computed -
+            # self-healing backfill rather than a one-off migration script.
             to_recompute.append(fire)
     return to_recompute
 

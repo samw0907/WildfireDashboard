@@ -254,6 +254,16 @@
   color: var(--accent-orange);
 }
 
+.stat-icon--red {
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--accent-red);
+}
+
+.stat-icon--yellow {
+  background: rgba(234, 179, 8, 0.12);
+  color: var(--accent-yellow);
+}
+
 .stat-value {
   font-size: 26px;
   font-weight: 700;
@@ -265,6 +275,14 @@
 
 .stat-value--orange {
   color: var(--accent-orange);
+}
+
+.stat-value--red {
+  color: var(--accent-red);
+}
+
+.stat-value--yellow {
+  color: var(--accent-yellow);
 }
 
 .stat-unit {
@@ -384,10 +402,32 @@
 }
 
 .exposure-band h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   color: var(--text-muted);
   font-weight: 600;
   margin-bottom: 8px;
+}
+
+.band-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.band-dot--red {
+  background: var(--accent-red);
+}
+
+.band-dot--orange {
+  background: var(--accent-orange);
+}
+
+.band-dot--yellow {
+  background: var(--accent-yellow);
 }
 
 .computed-at {

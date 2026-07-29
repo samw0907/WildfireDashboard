@@ -1,14 +1,19 @@
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
+from shapely.geometry import mapping
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .. import overpass
+from .. import geo, overpass
 from ..config import get_settings
 from ..db import SessionLocal
-from ..exposure import compute_exposure_for_fire
+from ..exposure import BUFFER_BANDS, compute_exposure_for_fire
 from ..models import BuildingCache, ExposureStat, Fire
 from ..schemas import ExposureStatOut, FireDetailOut, FireOut
+
+# Bands worth drawing as a ring on the map - excludes 0 (the perimeter
+# itself, which the frontend already has and renders separately).
+MAP_BUFFER_BANDS = [b for b in BUFFER_BANDS if b > 0]
 
 router = APIRouter(prefix="/api")
 
@@ -74,9 +79,10 @@ def get_fire(fire_id: str, db: Session = Depends(get_db)):
 
     exposure_by_fire = _latest_exposure_by_fire(db, [fire_id])
     cache = db.get(BuildingCache, fire_id)
+    buffers = {str(band): mapping(geo.buffer_meters(fire.perimeter, band)) for band in MAP_BUFFER_BANDS}
 
     base = _to_fire_out(fire, exposure_by_fire.get(fire_id, []))
-    return FireDetailOut(**base.model_dump(), buildings=cache.buildings if cache else None)
+    return FireDetailOut(**base.model_dump(), buildings=cache.buildings if cache else None, buffers=buffers)
 
 
 def require_recompute_key(x_api_key: str | None = Header(default=None)) -> None:

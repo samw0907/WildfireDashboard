@@ -5,7 +5,15 @@ import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
 import { BuildingIcon, PeopleIcon } from '../components/icons'
 
-const BANDS = [500, 1000, 2400]
+// Matches the ring colors drawn on the map (see FireMap.tsx) - 0m (the
+// perimeter itself) shares "red" with the 500m band since both represent
+// the most immediate exposure zone.
+const BAND_CONFIG: { band: number; label: string; accent: 'red' | 'orange' | 'yellow' }[] = [
+  { band: 0, label: 'Within fire perimeter', accent: 'red' },
+  { band: 500, label: '500m buffer', accent: 'red' },
+  { band: 1000, label: '1,000m buffer', accent: 'orange' },
+  { band: 2400, label: '2,400m buffer', accent: 'yellow' },
+]
 
 export function FireDetail() {
   const { id } = useParams<{ id: string }>()
@@ -39,27 +47,30 @@ export function FireDetail() {
 
       <div className="fire-detail-split">
         <div className="fire-detail-map">
-          <FireMap fires={[fire]} selectedFireId={fire.id} fitToSelection />
+          <FireMap fires={[fire]} selectedFireId={fire.id} fitToSelection buffers={fire.buffers} />
         </div>
         <div className="exposure-panel">
           <h2>Exposure</h2>
           {fire.exposure.length === 0 && (
             <p className="page-subtitle">Exposure data pending — this fire hasn't been processed yet.</p>
           )}
-          {BANDS.map((band) => {
+          {BAND_CONFIG.map(({ band, label, accent }) => {
             const stat = fire.exposure.find((e) => e.buffer_meters === band)
             if (!stat) return null
             return (
               <div key={band} className="exposure-band">
-                <h3>{band}m buffer</h3>
+                <h3>
+                  <span className={`band-dot band-dot--${accent}`} />
+                  {label}
+                </h3>
                 <div className="stat-row">
-                  <StatCard label="Buildings" value={stat.building_count ?? '—'} icon={BuildingIcon} />
+                  <StatCard label="Buildings" value={stat.building_count ?? '—'} accent={accent} icon={BuildingIcon} />
                   <StatCard
                     label="Population est."
                     value={
                       stat.population_est != null ? Math.round(stat.population_est).toLocaleString() : 'Pending'
                     }
-                    accent="orange"
+                    accent={accent}
                     icon={PeopleIcon}
                   />
                 </div>

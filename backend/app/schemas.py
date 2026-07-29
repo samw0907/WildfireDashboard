@@ -25,3 +25,8 @@ class FireOut(BaseModel):
 
 class FireDetailOut(FireOut):
     buildings: dict | None
+    # Buffer ring polygons (500m/1000m/2400m), keyed by band as a string
+    # since JSON object keys must be strings. Computed on-the-fly from the
+    # perimeter, not stored - cheap (milliseconds) and always consistent
+    # with the perimeter, so no reason to persist it.
+    buffers: dict[str, dict]
