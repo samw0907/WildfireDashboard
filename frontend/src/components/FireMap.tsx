@@ -266,7 +266,10 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
     <div className="fire-map-container">
       <div ref={containerRef} className="fire-map" />
       {enableAlerts && alerts && alerts.features.length > 0 && (
-        <label className="alerts-toggle">
+        <label
+          className="alerts-toggle"
+          title="Issued by local NWS offices when wind, humidity, and dryness combine to create critical fire weather - not tied to fire counts or size, so coverage can be a tight regional cluster on one day and nationwide the next."
+        >
           <input type="checkbox" checked={alertsVisible} onChange={(e) => setAlertsVisible(e.target.checked)} />
           Red Flag Warnings ({alerts.features.length})
         </label>

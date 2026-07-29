@@ -235,6 +235,19 @@ honesty/authoritative-source bar as everything else in this project:
   back in original planning. Toggleable map layer, same pattern as the
   buffer rings; the useful derived value is flagging whether a fire's own
   location currently sits inside an active warning.
+  - **Sanity-checked the "is this real data" question (2026-07-29):** live
+    map showed all active warnings clustered tightly in ID/MT with nothing
+    elsewhere, which looked suspicious enough to verify rather than assume.
+    Hit `api.weather.gov/alerts/active` directly: nationwide feed genuinely
+    returned only 5 active alerts at that moment, all issued by NWS
+    Missoula/Pocatello/Boise. Confirmed this is expected behavior, not a
+    bug — Red Flag Warnings are issued per local NWS office based on
+    synoptic-scale fire-weather conditions (wind, humidity, dryness), not
+    on fire counts or fire size, so coverage is legitimately regional and
+    day-dependent (could be nationwide during a widespread dry/wind event,
+    or a single-region cluster like this on a quiet day). Added a tooltip
+    on the map toggle explaining this so it doesn't read as broken to a
+    recruiter looking at it on a sparse day.
 - **Evacuation routes** — **decision: park this, not building it.** No
   standardized national data source exists for actual evacuation routes
   (those are decided by local emergency management in real time, not
