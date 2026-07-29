@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .exposure import run_exposure_cycle
 from .ingestion import run_ingestion_cycle
+from .nws import refresh_alerts_cache
+from .routers.alerts import router as alerts_router
 from .routers.fires import router as fires_router
 from .routers.status import router as status_router
 
@@ -43,13 +45,28 @@ async def _exposure_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def _alerts_loop() -> None:
+    # NWS fire-weather alerts change on their own schedule (issued/expired
+    # over hours, not minutes) - same polling cadence as ingestion is
+    # plenty fresh and keeps this simple, not because it needs to match.
+    interval_seconds = settings.nifc_ingestion_interval_minutes * 60
+    while True:
+        try:
+            await asyncio.to_thread(refresh_alerts_cache)
+        except Exception:
+            logger.exception("Unexpected error in NWS alerts loop")
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ingestion_task = asyncio.create_task(_ingestion_loop())
     exposure_task = asyncio.create_task(_exposure_loop())
+    alerts_task = asyncio.create_task(_alerts_loop())
     yield
     ingestion_task.cancel()
     exposure_task.cancel()
+    alerts_task.cancel()
 
 
 app = FastAPI(title="WildfireDashboard API", lifespan=lifespan)
@@ -63,6 +80,7 @@ app.add_middleware(
 
 app.include_router(fires_router)
 app.include_router(status_router)
+app.include_router(alerts_router)
 
 
 @app.api_route("/health", methods=["GET", "HEAD"])

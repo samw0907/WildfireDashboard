@@ -182,12 +182,20 @@ behind anything marked as a real choice, not just what got built.
     real version (network/isochrone travel-time analysis) is a genuine
     future idea, not a quick add.
 
-## Red Flag Warnings layer (confirmed, ready to build)
-- [ ] Fetch active NWS alerts (`api.weather.gov/alerts/active`, filtered to
-      Red Flag Warning / Fire Weather Watch), toggleable map layer, same
-      pattern as the buffer rings. Flag whether a fire's own location
-      currently sits inside an active warning - fills the "no US danger
-      classification" gap from original planning.
+## Red Flag Warnings layer (2026-07-29)
+- [x] Fetch active NWS alerts (`api.weather.gov/alerts/active`, filtered
+      to Red Flag Warning / Fire Weather Watch) - verified live before
+      building: alert features carry `geometry: null`, the real polygon
+      lives on referenced zones (`affectedZones` → `/zones/fire/{id}`),
+      deduped and cached in-process (refreshed every ingestion cycle;
+      no DB table needed at this scale - 5 alerts / 15 zones nationally
+      at time of testing). Toggleable violet dashed layer on Dashboard/Map
+      (not Fire Detail - a nationwide layer isn't useful zoomed into one
+      fire), same stacking pattern as the buffer rings. Fills the "no US
+      danger classification" gap from original planning.
+- [ ] Not yet built: flagging whether a fire's own location currently
+      sits inside an active warning (a derived per-fire boolean) - the
+      toggle layer ships first, this is a natural fast-follow if wanted.
 
 ## Priority-fire identification + SAR acquisition trigger (2026-07-29 —)
 Reprioritized above remaining Phase 1 polish - see `DECISIONS.md` for the

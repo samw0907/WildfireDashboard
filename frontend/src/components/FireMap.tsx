@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MapLibreMap, Popup } from 'maplibre-gl'
 import type { GeoJSONSource, MapLayerMouseEvent } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { exposureAtBand, type Fire } from '../api'
+import { exposureAtBand, getFireAlerts, type Fire } from '../api'
 
 interface FireMapProps {
   fires: Fire[]
@@ -14,11 +14,21 @@ interface FireMapProps {
   // for every fire on an all-fires map would be imperceptible at that zoom
   // level and just adds rendering cost.
   buffers?: Record<string, GeoJSON.Geometry>
+  // Whether to fetch and offer a toggle for the NWS Red Flag Warning /
+  // Fire Weather Watch layer - opt-in so Fire Detail's tiny zoomed-in map
+  // doesn't fetch a nationwide layer it has no use for.
+  enableAlerts?: boolean
 }
 
 const SOURCE_ID = 'fires'
 const FILL_LAYER_ID = 'fires-fill'
 const LINE_LAYER_ID = 'fires-line'
+const ALERTS_SOURCE_ID = 'alerts'
+const ALERTS_FILL_LAYER_ID = 'alerts-fill'
+const ALERTS_LINE_LAYER_ID = 'alerts-line'
+// Violet - deliberately distinct from the warm red/orange/yellow buffer
+// gradient, so weather alerts read as a different kind of thing on the map.
+const ALERTS_COLOR = '#9333ea'
 
 // Outward heat gradient: the closest buffer is most urgent (red, matching
 // the perimeter's own red outline), fading to yellow at the widest band -
@@ -57,11 +67,21 @@ function popupHtml(fire: Fire): string {
   `
 }
 
-export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, buffers }: FireMapProps) {
+export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, buffers, enableAlerts }: FireMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const firesRef = useRef<Fire[]>(fires)
   firesRef.current = fires
+
+  const [alerts, setAlerts] = useState<GeoJSON.FeatureCollection | null>(null)
+  const [alertsVisible, setAlertsVisible] = useState(true)
+
+  useEffect(() => {
+    if (!enableAlerts) return
+    getFireAlerts()
+      .then(setAlerts)
+      .catch(() => setAlerts(null))
+  }, [enableAlerts])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -79,6 +99,22 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
     mapRef.current = map
 
     map.on('load', () => {
+      // Alerts added first (bottom of stack) - covers huge regional areas,
+      // shouldn't visually dominate the fire-specific layers above it.
+      map.addSource(ALERTS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: ALERTS_FILL_LAYER_ID,
+        type: 'fill',
+        source: ALERTS_SOURCE_ID,
+        paint: { 'fill-color': ALERTS_COLOR, 'fill-opacity': 0.08 },
+      })
+      map.addLayer({
+        id: ALERTS_LINE_LAYER_ID,
+        type: 'line',
+        source: ALERTS_SOURCE_ID,
+        paint: { 'line-color': ALERTS_COLOR, 'line-width': 1, 'line-dasharray': [3, 2] },
+      })
+
       for (const band of BUFFER_BAND_ORDER) {
         const bandSourceId = `buffer-${band}`
         map.addSource(bandSourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
@@ -189,6 +225,11 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
         )
       }
 
+      const alertsSource = map.getSource(ALERTS_SOURCE_ID) as GeoJSONSource | undefined
+      if (alertsSource && alerts) {
+        alertsSource.setData(alerts)
+      }
+
       if (fitToSelection && selectedFireId) {
         const selected = fires.find((f) => f.id === selectedFireId)
         const coords = selected ? flattenCoords(selected.perimeter) : []
@@ -211,7 +252,25 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
     } else {
       map.once('load', updateData)
     }
-  }, [fires, selectedFireId, fitToSelection, buffers])
+  }, [fires, selectedFireId, fitToSelection, buffers, alerts])
 
-  return <div ref={containerRef} className="fire-map" />
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const visibility = alertsVisible ? 'visible' : 'none'
+    if (map.getLayer(ALERTS_FILL_LAYER_ID)) map.setLayoutProperty(ALERTS_FILL_LAYER_ID, 'visibility', visibility)
+    if (map.getLayer(ALERTS_LINE_LAYER_ID)) map.setLayoutProperty(ALERTS_LINE_LAYER_ID, 'visibility', visibility)
+  }, [alertsVisible])
+
+  return (
+    <div className="fire-map-container">
+      <div ref={containerRef} className="fire-map" />
+      {enableAlerts && alerts && alerts.features.length > 0 && (
+        <label className="alerts-toggle">
+          <input type="checkbox" checked={alertsVisible} onChange={(e) => setAlertsVisible(e.target.checked)} />
+          Red Flag Warnings ({alerts.features.length})
+        </label>
+      )}
+    </div>
+  )
 }

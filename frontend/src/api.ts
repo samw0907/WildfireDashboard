@@ -38,6 +38,14 @@ export interface IngestionStatus {
   last_successful_at: string | null
 }
 
+export interface FireAlertProperties {
+  event: string
+  headline: string | null
+  areaDesc: string | null
+  effective: string | null
+  expires: string | null
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${path}`)
   if (!res.ok) {
@@ -81,6 +89,10 @@ export function getFire(id: string): Promise<FireDetail> {
 
 export function getIngestionStatus(): Promise<IngestionStatus> {
   return get<IngestionStatus>('/api/status')
+}
+
+export function getFireAlerts(): Promise<GeoJSON.FeatureCollection> {
+  return get<GeoJSON.FeatureCollection>('/api/alerts')
 }
 
 export function exposureAtBand(exposure: ExposureStat[], bufferMeters: number): ExposureStat | undefined {

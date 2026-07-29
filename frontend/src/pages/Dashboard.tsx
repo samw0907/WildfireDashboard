@@ -48,7 +48,7 @@ export function Dashboard() {
       </div>
 
       <div className="dashboard-map-full">
-        <FireMap fires={fires} onSelectFire={(id) => navigate(`/fires/${id}`)} />
+        <FireMap fires={fires} onSelectFire={(id) => navigate(`/fires/${id}`)} enableAlerts />
       </div>
 
       <FireFilters fires={fires} filters={filters} onChange={setFilters} />

@@ -15,7 +15,7 @@ export function MapPage() {
 
   return (
     <div className="map-page">
-      <FireMap fires={fires} onSelectFire={(id) => navigate(`/fires/${id}`)} />
+      <FireMap fires={fires} onSelectFire={(id) => navigate(`/fires/${id}`)} enableAlerts />
     </div>
   )
 }
