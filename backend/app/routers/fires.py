@@ -9,6 +9,7 @@ from ..config import get_settings
 from ..db import SessionLocal
 from ..exposure import BUFFER_BANDS, compute_exposure_for_fire
 from ..models import BuildingCache, ExposureStat, Fire
+from ..nws import fires_in_active_warnings, get_cached_alerts
 from ..priority import compute_priority_scores
 from ..schemas import ExposureStatOut, FireDetailOut, FireOut
 
@@ -52,7 +53,9 @@ def _latest_exposure_by_fire(session: Session, fire_ids: list[str]) -> dict[str,
     return by_fire
 
 
-def _to_fire_out(fire: Fire, exposure: list[ExposureStat], priority_score: float) -> FireOut:
+def _to_fire_out(
+    fire: Fire, exposure: list[ExposureStat], priority_score: float, in_warning: bool
+) -> FireOut:
     return FireOut(
         id=fire.id,
         name=fire.name,
@@ -66,6 +69,7 @@ def _to_fire_out(fire: Fire, exposure: list[ExposureStat], priority_score: float
         complexity_level=fire.complexity_level,
         state=fire.state,
         priority_score=priority_score,
+        in_active_fire_weather_warning=in_warning,
         exposure=[ExposureStatOut.model_validate(e) for e in exposure],
     )
 
@@ -75,7 +79,10 @@ def list_fires(db: Session = Depends(get_db)):
     fires = db.scalars(select(Fire).order_by(Fire.source_updated.desc())).all()
     exposure_by_fire = _latest_exposure_by_fire(db, [f.id for f in fires])
     scores = compute_priority_scores(list(fires), exposure_by_fire)
-    return [_to_fire_out(f, exposure_by_fire.get(f.id, []), scores.get(f.id, 0.0)) for f in fires]
+    flagged = fires_in_active_warnings(list(fires), get_cached_alerts())
+    return [
+        _to_fire_out(f, exposure_by_fire.get(f.id, []), scores.get(f.id, 0.0), f.id in flagged) for f in fires
+    ]
 
 
 @router.get("/fires/{fire_id}", response_model=FireDetailOut)
@@ -89,11 +96,12 @@ def get_fire(fire_id: str, db: Session = Depends(get_db)):
     all_fires = db.scalars(select(Fire)).all()
     exposure_by_fire = _latest_exposure_by_fire(db, [f.id for f in all_fires])
     scores = compute_priority_scores(list(all_fires), exposure_by_fire)
+    flagged = fires_in_active_warnings([fire], get_cached_alerts())
 
     cache = db.get(BuildingCache, fire_id)
     buffers = {str(band): mapping(geo.buffer_meters(fire.perimeter, band)) for band in MAP_BUFFER_BANDS}
 
-    base = _to_fire_out(fire, exposure_by_fire.get(fire_id, []), scores.get(fire_id, 0.0))
+    base = _to_fire_out(fire, exposure_by_fire.get(fire_id, []), scores.get(fire_id, 0.0), fire_id in flagged)
     return FireDetailOut(**base.model_dump(), buildings=cache.buildings if cache else None, buffers=buffers)
 
 

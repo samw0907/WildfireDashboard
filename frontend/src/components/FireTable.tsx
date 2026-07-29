@@ -103,7 +103,14 @@ export function FireTable({ fires, onSelectFire }: FireTableProps) {
                 <td>
                   <span className={`priority-badge priority-badge--${priorityTier}`}>{f.priority_score}</span>
                 </td>
-                <td>{f.name}</td>
+                <td>
+                  {f.name}
+                  {f.in_active_fire_weather_warning && (
+                    <span className="warning-badge" title="Fire perimeter is inside an active NWS Red Flag Warning or Fire Weather Watch zone">
+                      ⚠ RFW
+                    </span>
+                  )}
+                </td>
                 <td>{f.state ?? '—'}</td>
                 <td>{f.discovered_date ? new Date(f.discovered_date).toLocaleDateString() : '—'}</td>
                 <td>{f.acres ? Math.round(f.acres).toLocaleString() : '—'}</td>

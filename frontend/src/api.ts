@@ -22,6 +22,7 @@ export interface Fire {
   complexity_level: string | null
   state: string | null
   priority_score: number
+  in_active_fire_weather_warning: boolean
   exposure: ExposureStat[]
 }
 

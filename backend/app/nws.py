@@ -11,6 +11,9 @@ alert.
 import logging
 
 import httpx
+from shapely.geometry import shape
+
+from .models import Fire
 
 logger = logging.getLogger(__name__)
 
@@ -87,3 +90,25 @@ def refresh_alerts_cache() -> None:
     global _cached_alerts
     _cached_alerts = fetch_active_fire_alerts()
     logger.info("NWS fire-weather alerts refreshed: %d zone features", len(_cached_alerts["features"]))
+
+
+def fires_in_active_warnings(fires: list[Fire], alerts: dict) -> set[str]:
+    """Returns the set of fire IDs whose perimeter intersects any currently
+    active NWS fire-weather warning zone."""
+    zone_geometries = [
+        shape(feature["geometry"]) for feature in alerts.get("features", []) if feature.get("geometry")
+    ]
+    if not zone_geometries:
+        return set()
+
+    flagged = set()
+    for fire in fires:
+        if not fire.perimeter:
+            continue
+        try:
+            fire_geom = shape(fire.perimeter)
+        except (ValueError, AttributeError):
+            continue
+        if any(fire_geom.intersects(zone) for zone in zone_geometries):
+            flagged.add(fire.id)
+    return flagged

@@ -193,9 +193,15 @@ behind anything marked as a real choice, not just what got built.
       (not Fire Detail - a nationwide layer isn't useful zoomed into one
       fire), same stacking pattern as the buffer rings. Fills the "no US
       danger classification" gap from original planning.
-- [ ] Not yet built: flagging whether a fire's own location currently
-      sits inside an active warning (a derived per-fire boolean) - the
-      toggle layer ships first, this is a natural fast-follow if wanted.
+- [x] **Per-fire warning flag** (fast-follow): `nws.fires_in_active_warnings()`
+      shapely-intersects each fire's stored perimeter against the cached
+      zone geometries; exposed as `in_active_fire_weather_warning` on
+      `FireOut`, computed in both `list_fires()` and `get_fire()` from the
+      same in-process alert cache (no extra HTTP calls). Surfaced as a
+      violet "⚠ RFW" pill in the fire table (next to the name) and a
+      "⚠ Active fire weather warning" badge in the Fire Detail incident-
+      badges row. Verified live: 7 of 232 tracked fires flagged at time
+      of testing.
 
 ## Priority-fire identification + SAR acquisition trigger (2026-07-29 —)
 Reprioritized above remaining Phase 1 polish - see `DECISIONS.md` for the

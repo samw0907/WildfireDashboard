@@ -46,6 +46,11 @@ export function FireDetail() {
       </p>
 
       <div className="incident-badges">
+        {fire.in_active_fire_weather_warning && (
+          <span className="warning-badge" title="Fire perimeter is inside an active NWS Red Flag Warning or Fire Weather Watch zone">
+            ⚠ Active fire weather warning
+          </span>
+        )}
         {fire.percent_contained != null && <span className="badge">{fire.percent_contained}% contained</span>}
         {fire.fire_cause && <span className="badge">Cause: {fire.fire_cause}</span>}
         {fire.complexity_level && <span className="badge">{fire.complexity_level}</span>}

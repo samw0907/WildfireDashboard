@@ -25,6 +25,7 @@ class FireOut(BaseModel):
     complexity_level: str | None
     state: str | None
     priority_score: float
+    in_active_fire_weather_warning: bool
     exposure: list[ExposureStatOut]
 
 
