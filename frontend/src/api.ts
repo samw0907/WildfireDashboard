@@ -123,6 +123,54 @@ export function getFireWeather(id: string): Promise<FireWeather> {
   return get<FireWeather>(`/api/fires/${id}/weather`)
 }
 
+export interface Scene {
+  id: string
+  name: string
+  date: string
+  orbit_direction: string | null
+  relative_orbit: number | null
+}
+
+export interface AcquisitionCandidates {
+  before: Scene[]
+  after: Scene[]
+}
+
+export interface Acquisition {
+  status: 'marked' | 'confirmed' | null
+  before_scene: Scene | null
+  after_scene: Scene | null
+  confirmed_at: string | null
+}
+
+export function getAcquisition(id: string): Promise<Acquisition> {
+  return get<Acquisition>(`/api/fires/${id}/acquisition`)
+}
+
+export function getAcquisitionCandidates(id: string): Promise<AcquisitionCandidates> {
+  return get<AcquisitionCandidates>(`/api/fires/${id}/acquisition/candidates`)
+}
+
+export function markForAcquisition(id: string): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${id}/acquisition/mark`, { method: 'POST' })
+}
+
+export function selectAcquisitionScenes(id: string, before: Scene, after: Scene): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${id}/acquisition/select`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ before, after }),
+  })
+}
+
+export function confirmAcquisition(id: string): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${id}/acquisition/confirm`, { method: 'POST' })
+}
+
+export function unmarkAcquisition(id: string): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${id}/acquisition/unmark`, { method: 'POST' })
+}
+
 export function exposureAtBand(exposure: ExposureStat[], bufferMeters: number): ExposureStat | undefined {
   return exposure.find((e) => e.buffer_meters === bufferMeters)
 }

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWeather } from '../api'
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
+import { AcquisitionPanel } from '../components/AcquisitionPanel'
 import {
   BuildingIcon,
   PeopleIcon,
@@ -97,6 +98,8 @@ export function FireDetail() {
           </span>
         )}
       </div>
+
+      <AcquisitionPanel fireId={fire.id} />
 
       <div className="fire-detail-split">
         <div className="fire-detail-map">

@@ -246,13 +246,28 @@ loop scene picking instead.
       a header, validated server-side. Verified: 403/403/200 for no-key/
       wrong-key/correct-key. Frontend helper built, not yet consumed by a
       real feature (next up).
-- [ ] **"Mark for acquisition" + live scene picker**: reuse the CDSE
-      `search_scene()`-equivalent function from `LAwildfireSAR` to fetch
-      real candidate Sentinel-1 scenes (date, track, direction) across a
-      pre-fire and post-fire window. Before/after pickers shown side by
-      side; picking a "before" scene filters "after" candidates to the
-      same track number (falls back to same direction). Gated by the
-      admin key.
+- [x] **"Mark for acquisition" + live scene picker** (2026-07-29): generalized
+      the pipeline's `search_scene()` (single forced date+direction) into
+      `cdse.search_scenes()` - a date-range search across both orbit
+      directions, live-verified against the real CDSE catalogue (no auth
+      needed for search itself, confirmed). New `fires` columns
+      (`acquisition_status`/`acquisition_before_scene`/`acquisition_after_scene`/
+      `acquisition_confirmed_at` - mutable per-fire state, not a history)
+      via Alembic migration, applied directly (dev and prod share one
+      Railway Postgres). New `/api/fires/{id}/acquisition[...]` endpoints:
+      `GET` (state) and `GET /candidates` (live search, before window =
+      discovery date − 21 days, after window = discovery date → min(now,
+      +45 days)) are public/read-only since search costs nothing; `POST
+      /mark`, `/select`, `/confirm`, `/unmark` are admin-key gated
+      (state-mutating). Frontend `AcquisitionPanel` on Fire Detail: mark
+      button → side-by-side before/after scene picker (after list
+      client-side filtered to the before scene's exact relative orbit,
+      falling back to same orbit direction if no exact-track match exists
+      yet) → save selection → "Confirm & proceed". Confirm only records
+      the decision - **no compute dispatch happens yet**, and the UI says
+      so explicitly rather than implying otherwise. Verified end-to-end
+      live (mark/candidates/select/confirm/unmark all round-tripped
+      against the real fire list) before handoff.
 - [ ] **Compute dispatch + results display** (deferred design discussion,
       not started): refactor the pipeline's download/process/composite/
       change modules to take explicit scene IDs instead of config-file
@@ -262,10 +277,17 @@ loop scene picking instead.
       Detail. Honest schedule read: roughly a week if tightly scoped — the
       science is largely reusable, the real risk is the ephemeral-compute
       dispatch mechanism itself (new infrastructure).
-- [ ] Needs `CDSE_USER`/`CDSE_PASSWORD` added to `.env` — reuse the
-      existing LAwildfireSAR project's CDSE account rather than creating
-      a new one (already a documented placeholder in `.env.example` since
-      the start of this project).
+- [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
+      not yet consumed by any code (scene *search* needs no auth; these
+      will be needed once actual scene *download* is built as part of
+      compute dispatch, above).
+- [ ] **`ADMIN_ACCESS_KEY` still not set in the real `.env`** - confirmed
+      live (2026-07-29): all four mutating acquisition endpoints correctly
+      fail closed (403) with no key configured, which is safe, but it also
+      means "Mark for acquisition" won't work on the deployed site at all
+      until the key is added. The key itself was already generated earlier
+      this session and given to the user to add manually (never written to
+      `.env` directly, per standing rule) - just needs adding.
 
 ## Buffer visualization + within-perimeter stats + basemap (2026-07-29)
 - [x] Added a 4th "band" (0m = within the fire perimeter itself) to

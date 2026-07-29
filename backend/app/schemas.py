@@ -59,3 +59,36 @@ class ForecastPeriodOut(BaseModel):
 class FireWeatherOut(BaseModel):
     wind: WindOut
     periods: list[ForecastPeriodOut]
+
+
+class SceneOut(BaseModel):
+    id: str
+    name: str
+    date: datetime
+    orbit_direction: str | None
+    relative_orbit: int | None
+
+
+class SceneIn(BaseModel):
+    id: str
+    name: str
+    date: datetime
+    orbit_direction: str | None = None
+    relative_orbit: int | None = None
+
+
+class AcquisitionCandidatesOut(BaseModel):
+    before: list[SceneOut]
+    after: list[SceneOut]
+
+
+class AcquisitionSelectIn(BaseModel):
+    before: SceneIn
+    after: SceneIn
+
+
+class AcquisitionOut(BaseModel):
+    status: str | None
+    before_scene: SceneOut | None
+    after_scene: SceneOut | None
+    confirmed_at: datetime | None

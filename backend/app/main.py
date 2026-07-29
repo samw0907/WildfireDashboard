@@ -9,6 +9,7 @@ from .config import get_settings
 from .exposure import run_exposure_cycle
 from .ingestion import run_ingestion_cycle
 from .nws import refresh_alerts_cache
+from .routers.acquisition import router as acquisition_router
 from .routers.alerts import router as alerts_router
 from .routers.fires import router as fires_router
 from .routers.status import router as status_router
@@ -81,6 +82,7 @@ app.add_middleware(
 app.include_router(fires_router)
 app.include_router(status_router)
 app.include_router(alerts_router)
+app.include_router(acquisition_router)
 
 
 @app.api_route("/health", methods=["GET", "HEAD"])

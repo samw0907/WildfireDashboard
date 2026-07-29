@@ -408,6 +408,45 @@ from that project — reuse those rather than creating new ones. Needs
 documented as a Phase 2 placeholder in `.env.example` since the very
 start of this project).
 
+## Mark-for-acquisition implementation details (2026-07-29)
+Filling in the specifics not already nailed down in the design discussion
+above, live-verified before committing to them:
+- **CDSE search needs no auth at all** - verified directly against
+  `catalogue.dataspace.copernicus.eu/odata/v1/Products`: bbox+date-range
+  queries return full results including `relativeOrbitNumber` and
+  `orbitDirection` with zero credentials. The pipeline's original
+  `get_access_token()` is only needed for the actual scene *download*
+  step (compute-dispatch phase, not this one) - so this phase doesn't
+  touch `CDSE_USER`/`CDSE_PASSWORD` at all yet.
+- **Schema: columns on `fires`, not a separate table.** An
+  `AcquisitionRequest` table (with its own id/fire_id FK) would be the
+  "proper" normalized shape, but a fire only ever has one acquisition
+  request in flight at a time (no history requirement, unlike
+  `exposure_stats`) - four nullable columns
+  (`acquisition_status`/`acquisition_before_scene`/`acquisition_after_scene`/
+  `acquisition_confirmed_at`) is simpler and avoids a join for what's
+  fundamentally mutable per-fire state, not a time series.
+- **Search windows:** before = discovery date minus 21 days; after =
+  discovery date to min(today, discovery date + 45 days). Picked from
+  Sentinel-1's ~6-12 day revisit interval (enough real candidates on each
+  side without an unreasonably wide search), not from anything in the
+  original pipeline - these are tunable constants in
+  `routers/acquisition.py`, not deeply justified.
+- **Search AOI:** fire perimeter buffered 3km (reusing the project's
+  existing meter-accurate `geo.buffer_meters()`, not a crude degree pad),
+  bounding box taken from that.
+- **Auth split:** `GET` endpoints (state, candidates) are public/read-only
+  - live scene search costs nothing, so there's no reason to gate
+  browsing. `POST` endpoints (mark/select/confirm/unmark) are admin-key
+  gated even though none of them spend money yet either - consistent with
+  gating `RECOMPUTE_API_KEY` already does for a similarly "free but
+  shouldn't be public-writable" action, and simple vandalism-prevention
+  for a public demo site.
+- **"Confirm & proceed" only records the decision right now** - it does
+  not, and cannot yet, dispatch any compute (that's the separate,
+  not-yet-designed phase below). The UI says this explicitly rather than
+  implying a real dispatch happens, matching the project's honesty bar.
+
 ## Docker reassessment (2026-07-29)
 **Issue:** original plan carried over "Dockerize backend" as a generic
 near-end polish item from the existing portfolio's conventions, without

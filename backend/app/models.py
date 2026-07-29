@@ -28,6 +28,14 @@ class Fire(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # Human-in-the-loop SAR acquisition workflow (see DECISIONS.md) - mutable
+    # per-fire state, not a history, since only one acquisition request is
+    # ever in flight for a given fire at a time.
+    acquisition_status: Mapped[str | None] = mapped_column(String)  # None | 'marked' | 'confirmed'
+    acquisition_before_scene: Mapped[dict | None] = mapped_column(JSONB)
+    acquisition_after_scene: Mapped[dict | None] = mapped_column(JSONB)
+    acquisition_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
 
 class BuildingCache(Base):
     """Raw building geometries fetched once per fire at the largest buffer
