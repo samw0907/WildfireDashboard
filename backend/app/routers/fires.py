@@ -13,9 +13,9 @@ from ..nws import fires_in_active_warnings, get_cached_alerts
 from ..priority import compute_priority_scores
 from ..schemas import ExposureStatOut, FireDetailOut, FireOut, FireWeatherOut, ForecastPeriodOut, WindOut
 
-# Number of 12-hour forecast periods to return - 10 periods (day+night)
-# covers ~5 days, matching what was asked for on the Fire Detail page.
-FORECAST_PERIODS = 10
+# Daytime-only periods to return - 5 days including today, no overnight
+# rows (kept the Fire Detail forecast panel compact per user feedback).
+FORECAST_DAYS = 5
 
 # Bands worth drawing as a ring on the map - excludes 0 (the perimeter
 # itself, which the frontend already has and renders separately).
@@ -122,12 +122,17 @@ def get_fire_weather(fire_id: str, db: Session = Depends(get_db)):
     if periods is None:
         raise HTTPException(status_code=503, detail="Weather forecast temporarily unavailable")
 
+    # Current wind uses the actual current period (may be an overnight one
+    # if it's evening), regardless of the daytime-only filter below - that
+    # filter is just for the day-by-day forecast row.
     current = periods[0] if periods else None
     wind = WindOut(
         speed_mph=weather.parse_wind_speed_mph(current.get("windSpeed")) if current else None,
         direction_degrees=weather.COMPASS_DEGREES.get(current.get("windDirection", "")) if current else None,
         direction_text=current.get("windDirection") if current else None,
     )
+
+    day_periods = [p for p in periods if p.get("isDaytime")]
 
     return FireWeatherOut(
         wind=wind,
@@ -143,7 +148,7 @@ def get_fire_weather(fire_id: str, db: Session = Depends(get_db)):
                 wind_direction=p.get("windDirection"),
                 probability_of_precipitation=(p.get("probabilityOfPrecipitation") or {}).get("value"),
             )
-            for p in periods[:FORECAST_PERIODS]
+            for p in day_periods[:FORECAST_DAYS]
         ],
     )
 

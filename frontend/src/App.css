@@ -643,48 +643,56 @@
 }
 
 .forecast-section {
-  margin-top: 24px;
+  margin-top: 16px;
+}
+
+.forecast-section h3 {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
 }
 
 .forecast-row {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   overflow-x: auto;
   padding-bottom: 4px;
 }
 
 .forecast-card {
-  flex: 0 0 150px;
-  padding: 12px;
+  flex: 0 0 108px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--bg-elevated);
 }
 
 .forecast-card-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .forecast-card-temp {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .forecast-card-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 8px;
-  min-height: 32px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .forecast-card-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
+  gap: 1px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 

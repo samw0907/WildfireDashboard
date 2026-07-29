@@ -133,7 +133,7 @@ export function FireDetail() {
 
       {weather && weather.periods.length > 0 && (
         <div className="forecast-section">
-          <h2>Forecast</h2>
+          <h3>Forecast</h3>
           <div className="forecast-row">
             {weather.periods.map((p) => (
               <div key={p.start_time} className="forecast-card">
@@ -143,14 +143,18 @@ export function FireDetail() {
                     {p.temperature}&deg;{p.temperature_unit}
                   </div>
                 )}
-                {p.short_forecast && <div className="forecast-card-desc">{p.short_forecast}</div>}
+                {p.short_forecast && (
+                  <div className="forecast-card-desc" title={p.short_forecast}>
+                    {p.short_forecast}
+                  </div>
+                )}
                 <div className="forecast-card-details">
                   {p.wind_speed && (
                     <span>
-                      Wind: {p.wind_direction} {p.wind_speed}
+                      {p.wind_direction} {p.wind_speed}
                     </span>
                   )}
-                  {!!p.probability_of_precipitation && <span>Precip: {p.probability_of_precipitation}%</span>}
+                  {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
                 </div>
               </div>
             ))}
