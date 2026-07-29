@@ -8,6 +8,11 @@
 // VSCode's preview pane) silently no-op window.prompt() instead of
 // showing a dialog, which made the whole flow fail with no visible
 // feedback. A real DOM modal works in every context a page can render in.
+//
+// Deliberately sessionStorage, not localStorage: the key should be
+// forgotten when the tab/window closes, not cached indefinitely - a
+// shared/public machine shouldn't stay "logged in" across browser
+// sessions just because someone entered the key once, weeks ago.
 
 const STORAGE_KEY = 'wildfiredashboard-admin-key'
 
@@ -17,11 +22,11 @@ let pendingResolvers: Resolver[] = []
 let showModal: (() => void) | null = null
 
 export function getStoredAdminKey(): string | null {
-  return localStorage.getItem(STORAGE_KEY)
+  return sessionStorage.getItem(STORAGE_KEY)
 }
 
 export function clearStoredAdminKey(): void {
-  localStorage.removeItem(STORAGE_KEY)
+  sessionStorage.removeItem(STORAGE_KEY)
 }
 
 /** Called once by AdminKeyModal on mount to register itself as the thing
@@ -43,7 +48,7 @@ export function getOrPromptAdminKey(): Promise<string | null> {
 
 /** Called by AdminKeyModal when the user submits a value. */
 export function submitAdminKey(value: string): void {
-  localStorage.setItem(STORAGE_KEY, value)
+  sessionStorage.setItem(STORAGE_KEY, value)
   const resolvers = pendingResolvers
   pendingResolvers = []
   resolvers.forEach((resolve) => resolve(value))

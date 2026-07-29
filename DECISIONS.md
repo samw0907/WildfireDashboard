@@ -401,6 +401,27 @@ priority slot is a reasonable future add but explicitly sequenced after
 the core flow, since it's a new external service dependency (transactional
 email API/account) and not required for the cost-control property itself.
 
+**Key persistence tightened, `localStorage` → `sessionStorage` (2026-07-29):**
+user noticed the key survived a full frontend redeploy and, surprisingly,
+kept working in what they believed was a fresh incognito window - flagged
+this to understand and tighten the security model before going further.
+Clarified: redeploy surviving is expected and harmless (redeploying only
+replaces static files served from the origin; browser storage is tied to
+the origin, not any particular build). The incognito result is unresolved
+- true private-browsing storage isolation in a real browser shouldn't
+carry a value over, so this is most likely explained by the VSCode
+preview pane (already the source of the window.prompt bug) not fully
+isolating storage the way a real browser tab does, not a flaw in the app
+itself. Regardless, `localStorage`'s indefinite persistence was more than
+this needed - **switched to `sessionStorage`**: the key is now forgotten
+when the tab/browser closes rather than cached forever, while still
+avoiding a re-prompt on every action within one sitting. Explicitly still
+a shared secret, not per-person auth: the server has no notion of "who"
+presented the key, only whether the string matches - anyone holding the
+key value, or anyone with access to a browser tab where it's already
+cached for that session, can use it. A full login system was reconsidered
+and rejected again for the same reason as the original decision above.
+
 **Compute credentials needed:** the existing LAwildfireSAR pipeline
 already has a CDSE (Copernicus Data Space Ecosystem) account/credentials
 from that project — reuse those rather than creating new ones. Needs
