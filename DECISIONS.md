@@ -61,10 +61,29 @@ academic-hosted APIs (Overpass showed the same pattern) do have rough
 patches. `population_est` stays NULL in `exposure_stats` until this is
 confirmed working.
 **Retested 2026-07-29:** still stuck at `"status":"created"` after ~48s of
-polling, same pattern as the first test a day earlier. Not yet escalating
-to the self-hosted-raster fallback - continuing to treat this as "revisit
-later" rather than "confirmed broken," but two failed tests a day apart is
-starting to lean toward a persistent issue rather than a one-off incident.
+polling, same pattern as the first test a day earlier. Two failed tests a
+day apart confirmed this as a persistent issue, not a one-off incident.
+**Final decision (2026-07-29): dropped WorldPop entirely, switched to US
+Census Bureau data** - not just as a fallback, but as a better fit than
+WorldPop was ever going to be, given Phase 1 is explicitly US-only:
+- TIGERweb (block group geometries) needs no key at all - confirmed live
+- Census ACS 5-Year Data API (population) requires a free key as of a May
+  2026 policy change - confirmed live via a "Missing Key" response before
+  building against it, rather than assuming
+- Population-in-buffer computed as an areal-weighted intersection
+  (shapely, already a dependency) between block groups and buffer
+  polygons - no raster hosting, no `rasterio`, no new infrastructure at
+  all, unlike the self-hosted-WorldPop-raster fallback that was the
+  other option on the table
+- Reuses patterns already in the codebase: bbox-based ArcGIS REST queries
+  (same shape as `nifc.py`), shapely intersection math (same as buffer
+  containment checks)
+- Stronger methodology story for a US-only tool too - authoritative
+  government source beats a global gridded estimate for this use case
+- Built with a graceful degrade: if `CENSUS_API_KEY` isn't set yet (true
+  as of writing - key requested, not yet issued), or if the Census API
+  call fails at runtime, population_est stays null for that cycle without
+  blocking the building-count computation, which is independent of it
 **Contingency, if the hosted API turns out persistently unreliable:** fall
 back to self-hosting a WorldPop raster after all (Railway Volume ~$0.15/GB-
 month, or S3). Before making that call, re-derive the actual storage size

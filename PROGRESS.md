@@ -56,16 +56,17 @@ behind anything marked as a real choice, not just what got built.
         scheduled cycle pick a failed fire back up - avoids piling onto an
         already-struggling free service. Added a 2s politeness delay
         between requests too.
-  - [ ] WorldPop hosted stats API — no key needed for normal use (confirmed:
-        it's optional, for "larger queries and special functionality" only,
-        no self-serve key registration exists anyway). But live-tested and
-        found the task queue genuinely stuck (`"status":"created"` for 45+s
-        with a server-side PHP warning, using WorldPop's own documented
-        request format exactly) - see `DECISIONS.md`. Plan: retry later,
-        keep the hosted-API approach for now; self-hosted-raster fallback
-        stays on the table if this proves persistent, with a cost
-        reassessment against Phase 1's US-only scope if we get there.
-        `population_est` stays NULL until this is confirmed working.
+  - [x] WorldPop dropped entirely (persistently stuck task queue, confirmed
+        on two tests a day apart) in favor of **US Census Bureau data** -
+        TIGERweb for block group geometries (no key) + ACS 5-Year Data API
+        for population (free key, requested, not yet issued). Areal-
+        weighted population-in-buffer via shapely intersection - no raster
+        hosting needed at all. See `DECISIONS.md` for full reasoning.
+        `backend/app/census.py` built and the geometry half verified live
+        (152 block groups fetched for a real bbox); population half not
+        yet live-tested, pending the key. Graceful degrade confirmed:
+        `population_est` stays null without blocking building counts when
+        no key is configured.
   - Verified live: buildings fetched and stored in `building_cache`,
     `exposure_stats` rows written with real building counts (0 for two
     remote test fires — plausible, not yet confirmed against a

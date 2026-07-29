@@ -26,3 +26,10 @@ def buffer_meters(perimeter_geojson: dict, meters: int) -> BaseGeometry:
     geom_albers = transform(_to_albers, geom_wgs84)
     buffered_albers = geom_albers.buffer(meters)
     return transform(_to_wgs84, buffered_albers)
+
+
+def to_albers(geometry: BaseGeometry) -> BaseGeometry:
+    """Project a WGS84 geometry to CONUS Albers - needed for accurate area
+    calculations (e.g. areal-weighted population intersection), since area
+    in raw WGS84 degrees is meaningless."""
+    return transform(_to_albers, geometry)

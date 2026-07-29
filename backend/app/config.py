@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     nifc_ingestion_interval_minutes: int = 15
     exposure_staleness_hours: int = 24
     recompute_api_key: str | None = None
+    census_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore")
 

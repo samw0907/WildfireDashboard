@@ -36,16 +36,16 @@ deployment, alongside the existing geospatial-analysis depth.
 
 - **Fire perimeters**: [NIFC WFIGS Current Interagency Fire Perimeters](https://data-nifc.opendata.arcgis.com/datasets/nifc::wfigs-current-interagency-fire-perimeters) — US only
 - **Building footprints**: OpenStreetMap via the Overpass API
-- **Population estimates**: [WorldPop](https://www.worldpop.org/) hosted stats API (2000–2020 gridded population)
+- **Population estimates**: US Census Bureau — [TIGERweb](https://www.census.gov/data/developers/data-sets/TIGERweb-map-service.html) block group geometries + [ACS 5-Year](https://www.census.gov/data/developers/data-sets/acs-5year.html) population, areal-weighted against each buffer
 
 Full plain-language methodology is on the app's Reference page.
 
 ## Status
 
 Phase 1 (exposure/impact) is live and deployed. One known gap: population
-estimates are currently `null` — WorldPop's hosted stats API has a
-persistently stuck task queue (see `DECISIONS.md`), being monitored before
-deciding whether to fall back to a self-hosted raster approach.
+estimates are currently `null` — the Census population lookup is built
+and its geometry half is verified live, but the ACS Data API key was only
+just requested and hasn't arrived yet (see `DECISIONS.md`).
 
 Phase 2 (Sentinel-1 SAR confirmation) and Phase 3 (wind/fuel risk) are
 documented but not started.

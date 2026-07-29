@@ -18,20 +18,66 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from . import geo, overpass
+from . import census, geo, overpass
 from .config import get_settings
 from .db import SessionLocal
 from .models import BuildingCache, ExposureStat, Fire
 
 logger = logging.getLogger(__name__)
 
-BUFFER_BANDS = (500, 1000, 2400)
+BUFFER_BANDS = (0, 500, 1000, 2400)  # 0 = within the fire perimeter itself
 MAX_BAND = max(BUFFER_BANDS)
 
 # Politeness delay between Overpass requests - fair-use courtesy to the free
 # public instance, independent of our no-retry-on-failure policy. Matters
 # most on the very first backfill cycle, where every fire needs a fetch.
 REQUEST_DELAY_SECONDS = 2
+
+
+def _population_within_buffer(
+    block_groups: list[census.BlockGroup], population_by_geoid: dict[str, float], buffer_wgs84
+) -> float:
+    """Areal-weighted estimate: each block group contributes population *
+    (fraction of its area inside the buffer). Computed in Albers, since
+    area in raw WGS84 degrees is meaningless."""
+    buffer_albers = geo.to_albers(buffer_wgs84)
+    total = 0.0
+    for bg in block_groups:
+        pop = population_by_geoid.get(bg.geoid)
+        if pop is None:
+            continue
+        bg_albers = geo.to_albers(bg.geometry)
+        bg_area = bg_albers.area
+        if bg_area <= 0:
+            continue
+        intersection_area = bg_albers.intersection(buffer_albers).area
+        if intersection_area <= 0:
+            continue
+        total += pop * (intersection_area / bg_area)
+    return total
+
+
+def _compute_population_by_band(
+    band_buffers: dict[int, object], min_lat: float, min_lon: float, max_lat: float, max_lon: float
+) -> dict[int, float | None]:
+    """Best-effort: population is an enhancement over the building counts,
+    not something worth losing a fire's whole exposure computation over.
+    Returns all-None (not raised) if no API key is configured yet, or if
+    the Census API call itself fails for any reason - logged either way."""
+    api_key = get_settings().census_api_key
+    if not api_key:
+        return {band: None for band in band_buffers}
+
+    try:
+        block_groups = census.fetch_block_groups_in_bbox(min_lat=min_lat, min_lon=min_lon, max_lat=max_lat, max_lon=max_lon)
+        population_by_geoid = census.fetch_population_by_geoid(block_groups, api_key)
+        return {
+            band: _population_within_buffer(block_groups, population_by_geoid, buffer)
+            for band, buffer in band_buffers.items()
+        }
+    except Exception:
+        logger.exception("Census population lookup failed - leaving population_est null for this cycle")
+        return {band: None for band in band_buffers}
 
 
 def fires_needing_recompute(session: Session) -> list[Fire]:
@@ -85,13 +131,17 @@ def compute_exposure_for_fire(session: Session, fire: Fire, client: httpx.Client
     )
     session.execute(cache_stmt)
 
+    population_by_band = _compute_population_by_band(
+        band_buffers, min_lat=min_lat, min_lon=min_lon, max_lat=max_lat, max_lon=max_lon
+    )
+
     for band in BUFFER_BANDS:
         session.add(
             ExposureStat(
                 fire_id=fire.id,
                 buffer_meters=band,
                 building_count=counts[band],
-                population_est=None,  # TODO: wire in WorldPop hosted stats API once a key is registered
+                population_est=population_by_band[band],
             )
         )
 
