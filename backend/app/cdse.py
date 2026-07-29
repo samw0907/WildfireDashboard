@@ -67,4 +67,12 @@ def _to_scene_dict(product: dict) -> dict:
         "date": product["ContentDate"]["Start"],
         "orbit_direction": attrs.get("orbitDirection"),
         "relative_orbit": attrs.get("relativeOrbitNumber"),
+        "polarisation": attrs.get("polarisationChannels"),
+        # GeoJSON footprint of the actual imaged area - IW mode is acquired
+        # in bursts, so a scene can intersect an AOI's bounding box while a
+        # burst gap runs right through part of it (the real "Track 137
+        # burst gap" bug from the original LAwildfireSAR project). Full
+        # containment of the fire perimeter, not just bbox intersection, is
+        # what the caller should actually check.
+        "footprint": product.get("GeoFootprint"),
     }

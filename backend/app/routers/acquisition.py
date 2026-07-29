@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from shapely.geometry import shape
 from sqlalchemy.orm import Session
 
 from .. import cdse, geo
@@ -47,6 +48,34 @@ def _get_fire_or_404(db: Session, fire_id: str) -> Fire:
     if fire is None:
         raise HTTPException(status_code=404, detail="Fire not found")
     return fire
+
+
+def _scene_out(scene: dict, fire_geom_albers, fire_area_albers: float) -> SceneOut:
+    coverage_percent = None
+    footprint = scene.get("footprint")
+    if footprint and fire_area_albers > 0:
+        try:
+            # Real NIFC perimeters are often topologically invalid (self-
+            # intersecting rings from containment lines/unburned islands) -
+            # confirmed live this crashes GEOS intersection with a
+            # TopologyException on some scene footprints. buffer(0) is the
+            # standard shapely repair for this and doesn't meaningfully
+            # change the effective area.
+            scene_geom_albers = geo.to_albers(shape(footprint)).buffer(0)
+            overlap = fire_geom_albers.intersection(scene_geom_albers).area
+            coverage_percent = round(100 * overlap / fire_area_albers)
+        except Exception:
+            coverage_percent = None
+
+    return SceneOut(
+        id=scene["id"],
+        name=scene["name"],
+        date=scene["date"],
+        orbit_direction=scene["orbit_direction"],
+        relative_orbit=scene["relative_orbit"],
+        polarisation=scene["polarisation"],
+        aoi_coverage_percent=coverage_percent,
+    )
 
 
 def _to_acquisition_out(fire: Fire) -> AcquisitionOut:
@@ -88,9 +117,12 @@ def get_acquisition_candidates(fire_id: str, db: Session = Depends(get_db)):
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=503, detail=f"CDSE scene search failed (upstream error): {exc}") from exc
 
+    fire_geom_albers = geo.to_albers(shape(fire.perimeter)).buffer(0)
+    fire_area_albers = fire_geom_albers.area
+
     return AcquisitionCandidatesOut(
-        before=[SceneOut(**s) for s in before_scenes],
-        after=[SceneOut(**s) for s in after_scenes],
+        before=[_scene_out(s, fire_geom_albers, fire_area_albers) for s in before_scenes],
+        after=[_scene_out(s, fire_geom_albers, fire_area_albers) for s in after_scenes],
     )
 
 

@@ -16,6 +16,16 @@ function sceneLabel(s: Scene): string {
   return `${date} · ${s.orbit_direction ?? 'unknown'} · track ${s.relative_orbit ?? '?'}`
 }
 
+// Full AOI coverage (not just bbox-touching) matters more than anything
+// else visible here - IW mode's burst structure means a scene can graze
+// the fire's bounding box while a gap runs through the perimeter itself.
+function coverageTier(percent: number | null): 'good' | 'warn' | 'bad' | 'unknown' {
+  if (percent == null) return 'unknown'
+  if (percent >= 95) return 'good'
+  if (percent > 0) return 'warn'
+  return 'bad'
+}
+
 export function AcquisitionPanel({ fireId }: { fireId: string }) {
   const [acquisition, setAcquisition] = useState<Acquisition | null>(null)
   const [candidates, setCandidates] = useState<AcquisitionCandidates | null>(null)
@@ -104,7 +114,10 @@ export function AcquisitionPanel({ fireId }: { fireId: string }) {
                         setSelectedAfter(null)
                       }}
                     >
-                      {sceneLabel(s)}
+                      <span>{sceneLabel(s)}</span>
+                      <span className={`coverage-badge coverage-badge--${coverageTier(s.aoi_coverage_percent)}`}>
+                        {s.aoi_coverage_percent != null ? `${s.aoi_coverage_percent}% coverage` : 'coverage unknown'}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -120,7 +133,10 @@ export function AcquisitionPanel({ fireId }: { fireId: string }) {
                       className={`scene-option${selectedAfter?.id === s.id ? ' scene-option--selected' : ''}`}
                       onClick={() => setSelectedAfter(s)}
                     >
-                      {sceneLabel(s)}
+                      <span>{sceneLabel(s)}</span>
+                      <span className={`coverage-badge coverage-badge--${coverageTier(s.aoi_coverage_percent)}`}>
+                        {s.aoi_coverage_percent != null ? `${s.aoi_coverage_percent}% coverage` : 'coverage unknown'}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -156,9 +172,13 @@ export function AcquisitionPanel({ fireId }: { fireId: string }) {
         <div className="scene-summary">
           <p>
             <strong>Before:</strong> {sceneLabel(acquisition.before_scene)}
+            {acquisition.before_scene.aoi_coverage_percent != null &&
+              ` · ${acquisition.before_scene.aoi_coverage_percent}% coverage`}
           </p>
           <p>
             <strong>After:</strong> {sceneLabel(acquisition.after_scene)}
+            {acquisition.after_scene.aoi_coverage_percent != null &&
+              ` · ${acquisition.after_scene.aoi_coverage_percent}% coverage`}
           </p>
           {acquisition.status !== 'confirmed' && (
             <button

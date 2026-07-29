@@ -771,7 +771,9 @@
 }
 
 .scene-option {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   width: 100%;
   text-align: left;
   padding: 8px 10px;
@@ -787,6 +789,28 @@
 .scene-option--selected {
   border-color: var(--accent-orange);
   background: rgba(249, 115, 22, 0.12);
+}
+
+.coverage-badge {
+  font-size: 11px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.coverage-badge--good {
+  color: var(--accent-green);
+}
+
+.coverage-badge--warn {
+  color: var(--accent-yellow);
+}
+
+.coverage-badge--bad {
+  color: var(--accent-red);
+}
+
+.coverage-badge--unknown {
+  color: var(--text-muted);
 }
 
 .acquisition-actions {

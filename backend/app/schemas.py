@@ -67,6 +67,12 @@ class SceneOut(BaseModel):
     date: datetime
     orbit_direction: str | None
     relative_orbit: int | None
+    polarisation: str | None
+    # % of the fire's own perimeter actually covered by this scene's real
+    # imaged footprint (not just bbox intersection) - IW mode's burst
+    # structure means a scene can graze an AOI's bbox while a gap runs
+    # through the AOI itself. None if the footprint couldn't be checked.
+    aoi_coverage_percent: int | None
 
 
 class SceneIn(BaseModel):
@@ -75,6 +81,8 @@ class SceneIn(BaseModel):
     date: datetime
     orbit_direction: str | None = None
     relative_orbit: int | None = None
+    polarisation: str | None = None
+    aoi_coverage_percent: int | None = None
 
 
 class AcquisitionCandidatesOut(BaseModel):

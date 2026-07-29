@@ -268,6 +268,33 @@ loop scene picking instead.
       so explicitly rather than implying otherwise. Verified end-to-end
       live (mark/candidates/select/confirm/unmark all round-tripped
       against the real fire list) before handoff.
+- [x] **AOI coverage check per scene** (2026-07-29 fast-follow): user
+      flagged that date/track alone doesn't tell you whether a candidate
+      scene is actually *usable* - unlike optical, cloud/smoke don't
+      matter for SAR, but IW mode's burst structure means a scene can
+      touch the search bbox while a gap runs through the fire perimeter
+      itself (the literal "Track 137 burst gap" bug from the original
+      LAwildfireSAR project). Now computed for real: each candidate's
+      actual `GeoFootprint` (already returned by CDSE, previously
+      discarded) is intersected against the fire's own perimeter in
+      Albers-projected space, giving a genuine `aoi_coverage_percent`
+      (color-coded green ≥95% / yellow partial / red 0%) shown right on
+      each scene button. Also surfaces `polarisation` (VV/VH) per scene.
+      **Real bug hit and fixed during this**: real NIFC fire perimeters
+      are frequently topologically invalid (self-intersecting rings from
+      containment lines/unburned islands) - confirmed live this crashes
+      GEOS intersection with a `TopologyException` on some scenes.
+      Fixed with `.buffer(0)` (standard shapely repair), verified live:
+      previously-`None` coverage values on a real fire (Aspen Acres, ID)
+      resolved to real percentages (31%/69%/100%/0% etc. across its
+      candidate scenes) with the fix in place.
+- [ ] **Copernicus Browser deep-link per scene** (raised, not built):
+      idea was to let a human visually sanity-check a scene before
+      picking it. Checked CDSE's own documentation for a reliable
+      product-ID deep-link URL scheme and couldn't confirm one exists -
+      didn't want to ship a guessed/fragile URL. Lower priority than the
+      coverage check anyway, since coverage is the actual decision-driver;
+      revisit if a documented scheme turns up.
 - [ ] **Compute dispatch + results display** (deferred design discussion,
       not started): refactor the pipeline's download/process/composite/
       change modules to take explicit scene IDs instead of config-file

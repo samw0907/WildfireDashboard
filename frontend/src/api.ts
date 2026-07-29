@@ -129,6 +129,8 @@ export interface Scene {
   date: string
   orbit_direction: string | null
   relative_orbit: number | null
+  polarisation: string | null
+  aoi_coverage_percent: number | null
 }
 
 export interface AcquisitionCandidates {
