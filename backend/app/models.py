@@ -23,6 +23,7 @@ class Fire(Base):
     percent_contained: Mapped[int | None] = mapped_column(Integer)
     fire_cause: Mapped[str | None] = mapped_column(String)
     complexity_level: Mapped[str | None] = mapped_column(String)
+    state: Mapped[str | None] = mapped_column(String)  # e.g. "NE" - point of origin state
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

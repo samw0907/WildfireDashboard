@@ -1,13 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { listFires, exposureAtBand, type Fire } from '../api'
+import { listFires, type Fire } from '../api'
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
+import { FireFilters, EMPTY_FILTERS, applyFilters, type FiltersState } from '../components/FireFilters'
+import { FireTable } from '../components/FireTable'
 import { FlameIcon, AreaIcon } from '../components/icons'
 
 export function Dashboard() {
   const [fires, setFires] = useState<Fire[] | null>(null)
   const [error, setError] = useState(false)
+  const [filters, setFilters] = useState<FiltersState>(EMPTY_FILTERS)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -15,6 +18,8 @@ export function Dashboard() {
       .then(setFires)
       .catch(() => setError(true))
   }, [])
+
+  const filteredFires = useMemo(() => (fires ? applyFilters(fires, filters) : []), [fires, filters])
 
   if (error) {
     return (
@@ -42,26 +47,15 @@ export function Dashboard() {
         />
       </div>
 
-      <div className="dashboard-split">
-        <div className="dashboard-map">
-          <FireMap fires={fires} onSelectFire={(id) => navigate(`/fires/${id}`)} />
-        </div>
-        <div className="fire-list">
-          {fires.slice(0, 25).map((f) => {
-            const exp2400 = exposureAtBand(f.exposure, 2400)
-            return (
-              <button key={f.id} className="fire-list-item" onClick={() => navigate(`/fires/${f.id}`)}>
-                <div className="fire-list-name">{f.name}</div>
-                <div className="fire-list-meta">
-                  {f.acres ? `${Math.round(f.acres).toLocaleString()} ac` : 'Acreage unknown'}
-                  {f.percent_contained != null && ` · ${f.percent_contained}% contained`}
-                  {exp2400?.building_count != null && ` · ${exp2400.building_count} buildings within 2.4km`}
-                </div>
-              </button>
-            )
-          })}
-        </div>
+      <div className="dashboard-map-full">
+        <FireMap fires={fires} onSelectFire={(id) => navigate(`/fires/${id}`)} />
       </div>
+
+      <FireFilters fires={fires} filters={filters} onChange={setFilters} />
+      <p className="filter-result-count">
+        Showing {filteredFires.length} of {fires.length} fires
+      </p>
+      <FireTable fires={filteredFires} onSelectFire={(id) => navigate(`/fires/${id}`)} />
     </div>
   )
 }

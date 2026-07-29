@@ -1,0 +1,148 @@
+import { useState } from 'react'
+import type { Fire } from '../api'
+
+export interface FiltersState {
+  search: string
+  state: string
+  cause: string
+  complexity: string
+  minContained: string
+  maxContained: string
+  minAcres: string
+  maxAcres: string
+}
+
+export const EMPTY_FILTERS: FiltersState = {
+  search: '',
+  state: '',
+  cause: '',
+  complexity: '',
+  minContained: '',
+  maxContained: '',
+  minAcres: '',
+  maxAcres: '',
+}
+
+export function applyFilters(fires: Fire[], f: FiltersState): Fire[] {
+  return fires.filter((fire) => {
+    if (f.search && !fire.name.toLowerCase().includes(f.search.toLowerCase())) return false
+    if (f.state && fire.state !== f.state) return false
+    if (f.cause && fire.fire_cause !== f.cause) return false
+    if (f.complexity && fire.complexity_level !== f.complexity) return false
+    if (f.minContained !== '' && (fire.percent_contained ?? -1) < Number(f.minContained)) return false
+    if (f.maxContained !== '' && (fire.percent_contained ?? Infinity) > Number(f.maxContained)) return false
+    if (f.minAcres !== '' && (fire.acres ?? -1) < Number(f.minAcres)) return false
+    if (f.maxAcres !== '' && (fire.acres ?? Infinity) > Number(f.maxAcres)) return false
+    return true
+  })
+}
+
+const MORE_FILTER_KEYS: (keyof FiltersState)[] = [
+  'complexity',
+  'minContained',
+  'maxContained',
+  'minAcres',
+  'maxAcres',
+]
+
+interface FireFiltersProps {
+  fires: Fire[]
+  filters: FiltersState
+  onChange: (filters: FiltersState) => void
+}
+
+function uniqueSorted(values: (string | null)[]): string[] {
+  return Array.from(new Set(values.filter((v): v is string => !!v))).sort()
+}
+
+export function FireFilters({ fires, filters, onChange }: FireFiltersProps) {
+  const [expanded, setExpanded] = useState(false)
+
+  const states = uniqueSorted(fires.map((f) => f.state))
+  const causes = uniqueSorted(fires.map((f) => f.fire_cause))
+  const complexities = uniqueSorted(fires.map((f) => f.complexity_level))
+
+  const update = (patch: Partial<FiltersState>) => onChange({ ...filters, ...patch })
+  const moreActiveCount = MORE_FILTER_KEYS.filter((k) => filters[k] !== '').length
+  const anyActive = Object.values(filters).some((v) => v !== '')
+
+  return (
+    <div className="filter-bar-wrap">
+      <div className="filter-bar">
+        <input
+          className="filter-search"
+          type="text"
+          placeholder="Search fires by name…"
+          value={filters.search}
+          onChange={(e) => update({ search: e.target.value })}
+        />
+        <select value={filters.state} onChange={(e) => update({ state: e.target.value })}>
+          <option value="">All states</option>
+          {states.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <select value={filters.cause} onChange={(e) => update({ cause: e.target.value })}>
+          <option value="">All causes</option>
+          {causes.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <button className="filter-more-toggle" onClick={() => setExpanded((e) => !e)}>
+          More filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}
+        </button>
+        {anyActive && (
+          <button className="filter-clear" onClick={() => onChange(EMPTY_FILTERS)}>
+            Clear all
+          </button>
+        )}
+      </div>
+      {expanded && (
+        <div className="filter-more-panel">
+          <select value={filters.complexity} onChange={(e) => update({ complexity: e.target.value })}>
+            <option value="">Any complexity</option>
+            {complexities.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <div className="filter-range">
+            <span>Contained %</span>
+            <input
+              type="number"
+              placeholder="Min"
+              value={filters.minContained}
+              onChange={(e) => update({ minContained: e.target.value })}
+            />
+            <input
+              type="number"
+              placeholder="Max"
+              value={filters.maxContained}
+              onChange={(e) => update({ maxContained: e.target.value })}
+            />
+          </div>
+          <div className="filter-range">
+            <span>Acres</span>
+            <input
+              type="number"
+              placeholder="Min"
+              value={filters.minAcres}
+              onChange={(e) => update({ minAcres: e.target.value })}
+            />
+            <input
+              type="number"
+              placeholder="Max"
+              value={filters.maxAcres}
+              onChange={(e) => update({ maxAcres: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

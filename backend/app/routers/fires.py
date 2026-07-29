@@ -63,6 +63,7 @@ def _to_fire_out(fire: Fire, exposure: list[ExposureStat]) -> FireOut:
         percent_contained=fire.percent_contained,
         fire_cause=fire.fire_cause,
         complexity_level=fire.complexity_level,
+        state=fire.state,
         exposure=[ExposureStatOut.model_validate(e) for e in exposure],
     )
 

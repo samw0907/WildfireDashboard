@@ -19,7 +19,8 @@ QUERY_URL = (
 
 OUT_FIELDS = (
     "attr_IrwinID,attr_IncidentName,poly_GISAcres,attr_IncidentSize,attr_FireDiscoveryDateTime,"
-    "poly_DateCurrent,poly_CreateDate,attr_PercentContained,attr_FireCause,attr_IncidentComplexityLevel"
+    "poly_DateCurrent,poly_CreateDate,attr_PercentContained,attr_FireCause,attr_IncidentComplexityLevel,"
+    "attr_POOState"
 )
 
 PAGE_SIZE = 200
@@ -63,6 +64,9 @@ def _to_fire_record(feature: dict) -> dict | None:
         "percent_contained": props.get("attr_PercentContained"),
         "fire_cause": props.get("attr_FireCause"),
         "complexity_level": props.get("attr_IncidentComplexityLevel"),
+        # attr_POOState comes back as "US-NE" (ISO 3166-2) - strip the
+        # country prefix for a cleaner "NE" in filter dropdowns etc.
+        "state": (props.get("attr_POOState") or "").removeprefix("US-") or None,
     }
 
 

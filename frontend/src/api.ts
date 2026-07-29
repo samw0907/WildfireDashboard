@@ -18,6 +18,7 @@ export interface Fire {
   percent_contained: number | null
   fire_cause: string | null
   complexity_level: string | null
+  state: string | null
   exposure: ExposureStat[]
 }
 

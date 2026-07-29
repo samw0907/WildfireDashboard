@@ -23,6 +23,7 @@ class FireOut(BaseModel):
     percent_contained: int | None
     fire_cause: str | None
     complexity_level: str | None
+    state: str | None
     exposure: list[ExposureStatOut]
 
 
