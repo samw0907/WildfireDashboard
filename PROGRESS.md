@@ -164,6 +164,25 @@ behind anything marked as a real choice, not just what got built.
       the build, not just at the end); final pass once WorldPop/custom
       domain/etc. are resolved to update the "Status" section
 
+## Buffer visualization + within-perimeter stats + basemap (2026-07-29)
+- [x] Added a 4th "band" (0m = within the fire perimeter itself) to
+      `BUFFER_BANDS` - reused the existing generic band machinery rather
+      than special-casing it. Self-healing backfill: `fires_needing_recompute`
+      now also triggers when a fire is missing any currently-required band,
+      so adding this didn't need a one-off migration script.
+- [x] Buffer ring polygons (500/1000/2400m) added to the fire-detail API
+      response, computed on-the-fly from the perimeter (cheap, always
+      consistent, not worth persisting)
+- [x] Rings rendered on the Fire Detail map (stacked filled disks, largest
+      first, which is what makes them read as concentric rings), color-
+      matched to the exposure stat cards (red→orange→yellow outward)
+- [x] Swapped the MapLibre placeholder demo style for OpenFreeMap's
+      "Liberty" street style (free, no key, no rate limit) - satellite
+      imagery toggle (MapTiler) noted as a follow-up, not built yet
+- [x] Verified live end-to-end: backend redeployed with new bands/buffers,
+      frontend redeployed with rings/basemap, no regression on the
+      MapLibre worker-file fix from earlier
+
 ## QA pass on the live deployed site (2026-07-29)
 - [x] API 404 handling verified (`/api/fires/does-not-exist` → 404)
 - [x] All SPA client-side routes return 200 (`/`, `/map`, `/reference`,
