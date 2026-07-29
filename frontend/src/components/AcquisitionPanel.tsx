@@ -26,13 +26,29 @@ function coverageTier(percent: number | null): 'good' | 'warn' | 'bad' | 'unknow
   return 'bad'
 }
 
-export function AcquisitionPanel({ fireId }: { fireId: string }) {
+interface AcquisitionPanelProps {
+  fireId: string
+  // Reports whichever before/after scenes are currently relevant (mid-
+  // selection, or already saved) so the parent can draw their real
+  // footprints on the map for visual context.
+  onScenesChange?: (scenes: { before: Scene | null; after: Scene | null }) => void
+}
+
+export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelProps) {
   const [acquisition, setAcquisition] = useState<Acquisition | null>(null)
   const [candidates, setCandidates] = useState<AcquisitionCandidates | null>(null)
   const [selectedBefore, setSelectedBefore] = useState<Scene | null>(null)
   const [selectedAfter, setSelectedAfter] = useState<Scene | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    onScenesChange?.({
+      before: selectedBefore ?? acquisition?.before_scene ?? null,
+      after: selectedAfter ?? acquisition?.after_scene ?? null,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBefore, selectedAfter, acquisition?.before_scene, acquisition?.after_scene])
 
   const loadAcquisition = () => getAcquisition(fireId).then(setAcquisition).catch(() => setAcquisition(null))
 
@@ -158,7 +174,11 @@ export function AcquisitionPanel({ fireId }: { fireId: string }) {
                 <button
                   className="acquisition-cancel-btn"
                   disabled={busy}
-                  onClick={() => run(() => unmarkAcquisition(fireId), 'Could not cancel.')}
+                  onClick={() => {
+                    setSelectedBefore(null)
+                    setSelectedAfter(null)
+                    run(() => unmarkAcquisition(fireId), 'Could not cancel.')
+                  }}
                 >
                   Cancel
                 </button>
@@ -198,7 +218,11 @@ export function AcquisitionPanel({ fireId }: { fireId: string }) {
           <button
             className="acquisition-cancel-btn"
             disabled={busy}
-            onClick={() => run(() => unmarkAcquisition(fireId), 'Could not reset.')}
+            onClick={() => {
+              setSelectedBefore(null)
+              setSelectedAfter(null)
+              run(() => unmarkAcquisition(fireId), 'Could not reset.')
+            }}
           >
             Start over
           </button>

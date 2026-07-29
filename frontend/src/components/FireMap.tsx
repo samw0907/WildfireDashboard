@@ -18,6 +18,10 @@ interface FireMapProps {
   // Fire Weather Watch layer - opt-in so Fire Detail's tiny zoomed-in map
   // doesn't fetch a nationwide layer it has no use for.
   enableAlerts?: boolean
+  // Real Sentinel-1 scene footprints (before/after), for visual context
+  // while picking acquisition scenes - outline only, not filled, since a
+  // full IW swath is ~250km wide and would otherwise dominate the view.
+  sceneFootprints?: { before?: GeoJSON.Geometry | null; after?: GeoJSON.Geometry | null }
 }
 
 const SOURCE_ID = 'fires'
@@ -29,6 +33,13 @@ const ALERTS_LINE_LAYER_ID = 'alerts-line'
 // Violet - deliberately distinct from the warm red/orange/yellow buffer
 // gradient, so weather alerts read as a different kind of thing on the map.
 const ALERTS_COLOR = '#9333ea'
+const SCENE_BEFORE_SOURCE_ID = 'scene-before'
+const SCENE_AFTER_SOURCE_ID = 'scene-after'
+// Blue/cyan - a third, distinct hue family from the warm buffer gradient
+// and the violet alerts layer, so scene footprints read as their own
+// kind of thing (satellite coverage, not fire risk).
+const SCENE_BEFORE_COLOR = '#2563eb'
+const SCENE_AFTER_COLOR = '#0891b2'
 
 // Outward heat gradient: the closest buffer is most urgent (red, matching
 // the perimeter's own red outline), fading to yellow at the widest band -
@@ -67,7 +78,15 @@ function popupHtml(fire: Fire): string {
   `
 }
 
-export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, buffers, enableAlerts }: FireMapProps) {
+export function FireMap({
+  fires,
+  selectedFireId,
+  onSelectFire,
+  fitToSelection,
+  buffers,
+  enableAlerts,
+  sceneFootprints,
+}: FireMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const firesRef = useRef<Fire[]>(fires)
@@ -113,6 +132,23 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
         type: 'line',
         source: ALERTS_SOURCE_ID,
         paint: { 'line-color': ALERTS_COLOR, 'line-width': 1, 'line-dasharray': [3, 2] },
+      })
+
+      // Outline only, no fill - a full Sentinel-1 IW swath is ~250km wide
+      // and would blot out the whole map otherwise.
+      map.addSource(SCENE_BEFORE_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: `${SCENE_BEFORE_SOURCE_ID}-line`,
+        type: 'line',
+        source: SCENE_BEFORE_SOURCE_ID,
+        paint: { 'line-color': SCENE_BEFORE_COLOR, 'line-width': 2, 'line-dasharray': [4, 2] },
+      })
+      map.addSource(SCENE_AFTER_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: `${SCENE_AFTER_SOURCE_ID}-line`,
+        type: 'line',
+        source: SCENE_AFTER_SOURCE_ID,
+        paint: { 'line-color': SCENE_AFTER_COLOR, 'line-width': 2, 'line-dasharray': [4, 2] },
       })
 
       for (const band of BUFFER_BAND_ORDER) {
@@ -230,6 +266,15 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
         alertsSource.setData(alerts)
       }
 
+      const toFeatureCollection = (geometry?: GeoJSON.Geometry | null): GeoJSON.FeatureCollection => ({
+        type: 'FeatureCollection',
+        features: geometry ? [{ type: 'Feature', geometry, properties: {} }] : [],
+      })
+      const beforeSource = map.getSource(SCENE_BEFORE_SOURCE_ID) as GeoJSONSource | undefined
+      beforeSource?.setData(toFeatureCollection(sceneFootprints?.before))
+      const afterSource = map.getSource(SCENE_AFTER_SOURCE_ID) as GeoJSONSource | undefined
+      afterSource?.setData(toFeatureCollection(sceneFootprints?.after))
+
       if (fitToSelection && selectedFireId) {
         const selected = fires.find((f) => f.id === selectedFireId)
         const coords = selected ? flattenCoords(selected.perimeter) : []
@@ -252,7 +297,7 @@ export function FireMap({ fires, selectedFireId, onSelectFire, fitToSelection, b
     } else {
       map.once('load', updateData)
     }
-  }, [fires, selectedFireId, fitToSelection, buffers, alerts])
+  }, [fires, selectedFireId, fitToSelection, buffers, alerts, sceneFootprints])
 
   useEffect(() => {
     const map = mapRef.current

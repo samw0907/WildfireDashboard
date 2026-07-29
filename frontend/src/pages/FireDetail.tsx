@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWeather } from '../api'
+import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWeather, type Scene } from '../api'
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
 import { AcquisitionPanel } from '../components/AcquisitionPanel'
@@ -46,6 +46,10 @@ export function FireDetail() {
   const [fire, setFire] = useState<FireDetailData | null>(null)
   const [error, setError] = useState(false)
   const [weather, setWeather] = useState<FireWeather | null>(null)
+  const [acquisitionScenes, setAcquisitionScenes] = useState<{ before: Scene | null; after: Scene | null }>({
+    before: null,
+    after: null,
+  })
 
   useEffect(() => {
     if (!id) return
@@ -99,11 +103,17 @@ export function FireDetail() {
         )}
       </div>
 
-      <AcquisitionPanel fireId={fire.id} />
+      <AcquisitionPanel fireId={fire.id} onScenesChange={setAcquisitionScenes} />
 
       <div className="fire-detail-split">
         <div className="fire-detail-map">
-          <FireMap fires={[fire]} selectedFireId={fire.id} fitToSelection buffers={fire.buffers} />
+          <FireMap
+            fires={[fire]}
+            selectedFireId={fire.id}
+            fitToSelection
+            buffers={fire.buffers}
+            sceneFootprints={{ before: acquisitionScenes.before?.footprint, after: acquisitionScenes.after?.footprint }}
+          />
           {weather?.wind.direction_degrees != null && (
             <div
               className="wind-indicator"
@@ -124,6 +134,20 @@ export function FireDetail() {
                 />
               </svg>
               <span>{weather.wind.speed_mph} mph</span>
+            </div>
+          )}
+          {(acquisitionScenes.before || acquisitionScenes.after) && (
+            <div className="scene-legend">
+              {acquisitionScenes.before && (
+                <span>
+                  <span className="scene-legend-swatch scene-legend-swatch--before" /> Before scene
+                </span>
+              )}
+              {acquisitionScenes.after && (
+                <span>
+                  <span className="scene-legend-swatch scene-legend-swatch--after" /> After scene
+                </span>
+              )}
             </div>
           )}
         </div>

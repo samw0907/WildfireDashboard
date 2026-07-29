@@ -75,6 +75,7 @@ def _scene_out(scene: dict, fire_geom_albers, fire_area_albers: float) -> SceneO
         relative_orbit=scene["relative_orbit"],
         polarisation=scene["polarisation"],
         aoi_coverage_percent=coverage_percent,
+        footprint=footprint,
     )
 
 

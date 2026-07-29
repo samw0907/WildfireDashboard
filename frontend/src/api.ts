@@ -131,6 +131,7 @@ export interface Scene {
   relative_orbit: number | null
   polarisation: string | null
   aoi_coverage_percent: number | null
+  footprint: GeoJSON.Geometry | null
 }
 
 export interface AcquisitionCandidates {

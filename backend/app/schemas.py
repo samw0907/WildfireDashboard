@@ -73,6 +73,9 @@ class SceneOut(BaseModel):
     # structure means a scene can graze an AOI's bbox while a gap runs
     # through the AOI itself. None if the footprint couldn't be checked.
     aoi_coverage_percent: int | None
+    # GeoJSON footprint of the actual imaged area, passed through so the
+    # frontend can draw it as a map outline for visual context.
+    footprint: dict | None
 
 
 class SceneIn(BaseModel):
@@ -83,6 +86,7 @@ class SceneIn(BaseModel):
     relative_orbit: int | None = None
     polarisation: str | None = None
     aoi_coverage_percent: int | None = None
+    footprint: dict | None = None
 
 
 class AcquisitionCandidatesOut(BaseModel):

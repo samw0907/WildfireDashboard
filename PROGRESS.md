@@ -295,6 +295,17 @@ loop scene picking instead.
       didn't want to ship a guessed/fragile URL. Lower priority than the
       coverage check anyway, since coverage is the actual decision-driver;
       revisit if a documented scheme turns up.
+- [x] **Scene footprint outlines on the map** (2026-07-29): the real
+      `GeoFootprint` already being fetched for the coverage check (above)
+      is now passed through to the frontend and drawn as an outline-only
+      layer (no fill - a full IW swath is ~250km wide and would blot out
+      the map otherwise), same source/layer pattern as the buffer rings
+      and Red Flag Warnings layer. Blue = before scene, cyan = after
+      scene, with a small legend on the map when either is selected.
+      `AcquisitionPanel` reports whichever scenes are currently relevant
+      (mid-selection, or already saved) up to `FireDetail` via an
+      `onScenesChange` callback, which feeds `FireMap`. Verified live:
+      real ~250km swath polygon coordinates render correctly.
 - [ ] **Compute dispatch + results display** (deferred design discussion,
       not started): refactor the pipeline's download/process/composite/
       change modules to take explicit scene IDs instead of config-file
