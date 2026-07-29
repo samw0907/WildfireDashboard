@@ -20,6 +20,9 @@ class FireOut(BaseModel):
     acres: float | None
     discovered_date: datetime | None
     source_updated: datetime
+    percent_contained: int | None
+    fire_cause: str | None
+    complexity_level: str | None
     exposure: list[ExposureStatOut]
 
 

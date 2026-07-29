@@ -35,6 +35,9 @@ def upsert_fires(session: Session, records: list[dict]) -> None:
             "acres": stmt.excluded.acres,
             "discovered_date": stmt.excluded.discovered_date,
             "source_updated": stmt.excluded.source_updated,
+            "percent_contained": stmt.excluded.percent_contained,
+            "fire_cause": stmt.excluded.fire_cause,
+            "complexity_level": stmt.excluded.complexity_level,
             "ingested_at": datetime.now(timezone.utc),
         },
     )

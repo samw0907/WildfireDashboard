@@ -54,6 +54,7 @@ export function Dashboard() {
                 <div className="fire-list-name">{f.name}</div>
                 <div className="fire-list-meta">
                   {f.acres ? `${Math.round(f.acres).toLocaleString()} ac` : 'Acreage unknown'}
+                  {f.percent_contained != null && ` · ${f.percent_contained}% contained`}
                   {exp2400?.building_count != null && ` · ${exp2400.building_count} buildings within 2.4km`}
                 </div>
               </button>

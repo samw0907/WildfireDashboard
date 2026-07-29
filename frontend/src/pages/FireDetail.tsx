@@ -45,6 +45,18 @@ export function FireDetail() {
         {fire.source} · Last updated {new Date(fire.source_updated).toLocaleString()}
       </p>
 
+      <div className="incident-badges">
+        {fire.percent_contained != null && <span className="badge">{fire.percent_contained}% contained</span>}
+        {fire.fire_cause && <span className="badge">Cause: {fire.fire_cause}</span>}
+        {fire.complexity_level && <span className="badge">{fire.complexity_level}</span>}
+        {fire.discovered_date && (
+          <span className="badge">
+            {Math.max(0, Math.floor((Date.now() - new Date(fire.discovered_date).getTime()) / 86_400_000))} days
+            since discovery
+          </span>
+        )}
+      </div>
+
       <div className="fire-detail-split">
         <div className="fire-detail-map">
           <FireMap fires={[fire]} selectedFireId={fire.id} fitToSelection buffers={fire.buffers} />

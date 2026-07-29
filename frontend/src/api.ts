@@ -15,6 +15,9 @@ export interface Fire {
   acres: number | null
   discovered_date: string | null
   source_updated: string
+  percent_contained: number | null
+  fire_cause: string | null
+  complexity_level: string | null
   exposure: ExposureStat[]
 }
 

@@ -17,7 +17,10 @@ QUERY_URL = (
     "WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query"
 )
 
-OUT_FIELDS = "attr_IrwinID,attr_IncidentName,poly_GISAcres,attr_IncidentSize,attr_FireDiscoveryDateTime,poly_DateCurrent,poly_CreateDate"
+OUT_FIELDS = (
+    "attr_IrwinID,attr_IncidentName,poly_GISAcres,attr_IncidentSize,attr_FireDiscoveryDateTime,"
+    "poly_DateCurrent,poly_CreateDate,attr_PercentContained,attr_FireCause,attr_IncidentComplexityLevel"
+)
 
 PAGE_SIZE = 200
 
@@ -57,6 +60,9 @@ def _to_fire_record(feature: dict) -> dict | None:
         "acres": props.get("poly_GISAcres") or props.get("attr_IncidentSize"),
         "discovered_date": _parse_esri_date(props.get("attr_FireDiscoveryDateTime")),
         "source_updated": source_updated,
+        "percent_contained": props.get("attr_PercentContained"),
+        "fire_cause": props.get("attr_FireCause"),
+        "complexity_level": props.get("attr_IncidentComplexityLevel"),
     }
 
 

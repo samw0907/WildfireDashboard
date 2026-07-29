@@ -378,6 +378,22 @@
   font-size: 14px;
 }
 
+.incident-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
 .fire-detail-split {
   display: flex;
   gap: 16px;
