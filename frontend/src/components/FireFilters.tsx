@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import type { Fire } from '../api'
+import { exposureAtBand, type Fire } from '../api'
+
+// Population filters use the 2400m band - the widest/most complete
+// estimate, same band already used elsewhere (table, popups) as the
+// headline exposure figure. Filtering on it will just show nothing
+// meaningful until the Census population lookup is live (population_est
+// is null for every fire right now), but the UI is ready for when it is.
+const POPULATION_BAND = 2400
 
 export interface FiltersState {
   search: string
@@ -10,6 +17,8 @@ export interface FiltersState {
   maxContained: string
   minAcres: string
   maxAcres: string
+  minPopulation: string
+  maxPopulation: string
 }
 
 export const EMPTY_FILTERS: FiltersState = {
@@ -21,6 +30,8 @@ export const EMPTY_FILTERS: FiltersState = {
   maxContained: '',
   minAcres: '',
   maxAcres: '',
+  minPopulation: '',
+  maxPopulation: '',
 }
 
 export function applyFilters(fires: Fire[], f: FiltersState): Fire[] {
@@ -33,6 +44,11 @@ export function applyFilters(fires: Fire[], f: FiltersState): Fire[] {
     if (f.maxContained !== '' && (fire.percent_contained ?? Infinity) > Number(f.maxContained)) return false
     if (f.minAcres !== '' && (fire.acres ?? -1) < Number(f.minAcres)) return false
     if (f.maxAcres !== '' && (fire.acres ?? Infinity) > Number(f.maxAcres)) return false
+    if (f.minPopulation !== '' || f.maxPopulation !== '') {
+      const population = exposureAtBand(fire.exposure, POPULATION_BAND)?.population_est
+      if (f.minPopulation !== '' && (population ?? -1) < Number(f.minPopulation)) return false
+      if (f.maxPopulation !== '' && (population ?? Infinity) > Number(f.maxPopulation)) return false
+    }
     return true
   })
 }
@@ -43,6 +59,8 @@ const MORE_FILTER_KEYS: (keyof FiltersState)[] = [
   'maxContained',
   'minAcres',
   'maxAcres',
+  'minPopulation',
+  'maxPopulation',
 ]
 
 interface FireFiltersProps {
@@ -139,6 +157,21 @@ export function FireFilters({ fires, filters, onChange }: FireFiltersProps) {
               placeholder="Max"
               value={filters.maxAcres}
               onChange={(e) => update({ maxAcres: e.target.value })}
+            />
+          </div>
+          <div className="filter-range">
+            <span>Population (2.4km)</span>
+            <input
+              type="number"
+              placeholder="Min"
+              value={filters.minPopulation}
+              onChange={(e) => update({ minPopulation: e.target.value })}
+            />
+            <input
+              type="number"
+              placeholder="Max"
+              value={filters.maxPopulation}
+              onChange={(e) => update({ maxPopulation: e.target.value })}
             />
           </div>
         </div>

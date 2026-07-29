@@ -1,27 +1,42 @@
 import { useState } from 'react'
 import { exposureAtBand, type Fire } from '../api'
 
-type SortKey = 'name' | 'state' | 'acres' | 'percent_contained' | 'fire_cause' | 'complexity_level' | 'buildings'
+type SortKey =
+  | 'name'
+  | 'state'
+  | 'acres'
+  | 'percent_contained'
+  | 'fire_cause'
+  | 'complexity_level'
+  | 'buildings'
+  | 'population'
+  | 'discovered_date'
 type SortDirection = 'asc' | 'desc'
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'state', label: 'State' },
+  { key: 'discovered_date', label: 'Discovered' },
   { key: 'acres', label: 'Acres' },
   { key: 'percent_contained', label: 'Contained' },
   { key: 'fire_cause', label: 'Cause' },
   { key: 'complexity_level', label: 'Complexity' },
   { key: 'buildings', label: 'Buildings (2.4km)' },
+  { key: 'population', label: 'Population (2.4km)' },
 ]
 
 function getSortValue(fire: Fire, key: SortKey): string | number {
   switch (key) {
     case 'buildings':
       return exposureAtBand(fire.exposure, 2400)?.building_count ?? -1
+    case 'population':
+      return exposureAtBand(fire.exposure, 2400)?.population_est ?? -1
     case 'acres':
       return fire.acres ?? -1
     case 'percent_contained':
       return fire.percent_contained ?? -1
+    case 'discovered_date':
+      return fire.discovered_date ? new Date(fire.discovered_date).getTime() : -1
     case 'name':
       return fire.name.toLowerCase()
     case 'state':
@@ -77,16 +92,18 @@ export function FireTable({ fires, onSelectFire }: FireTableProps) {
         </thead>
         <tbody>
           {sorted.map((f) => {
-            const buildings = exposureAtBand(f.exposure, 2400)?.building_count
+            const exp2400 = exposureAtBand(f.exposure, 2400)
             return (
               <tr key={f.id} onClick={() => onSelectFire(f.id)}>
                 <td>{f.name}</td>
                 <td>{f.state ?? '—'}</td>
+                <td>{f.discovered_date ? new Date(f.discovered_date).toLocaleDateString() : '—'}</td>
                 <td>{f.acres ? Math.round(f.acres).toLocaleString() : '—'}</td>
                 <td>{f.percent_contained != null ? `${f.percent_contained}%` : '—'}</td>
                 <td>{f.fire_cause ?? '—'}</td>
                 <td>{f.complexity_level ?? '—'}</td>
-                <td>{buildings ?? '—'}</td>
+                <td>{exp2400?.building_count ?? '—'}</td>
+                <td>{exp2400?.population_est != null ? Math.round(exp2400.population_est).toLocaleString() : 'Pending'}</td>
               </tr>
             )
           })}
