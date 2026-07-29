@@ -60,6 +60,11 @@ be a transient incident rather than a structural problem, and free
 academic-hosted APIs (Overpass showed the same pattern) do have rough
 patches. `population_est` stays NULL in `exposure_stats` until this is
 confirmed working.
+**Retested 2026-07-29:** still stuck at `"status":"created"` after ~48s of
+polling, same pattern as the first test a day earlier. Not yet escalating
+to the self-hosted-raster fallback - continuing to treat this as "revisit
+later" rather than "confirmed broken," but two failed tests a day apart is
+starting to lean toward a persistent issue rather than a one-off incident.
 **Contingency, if the hosted API turns out persistently unreliable:** fall
 back to self-hosting a WorldPop raster after all (Railway Volume ~$0.15/GB-
 month, or S3). Before making that call, re-derive the actual storage size

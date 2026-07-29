@@ -19,7 +19,8 @@ behind anything marked as a real choice, not just what got built.
 - [x] AWS/CDSE credentials intentionally excluded + documented in `.env.example`
       (AWS → GitHub Actions secrets later; CDSE → Phase 2 only)
 - [x] `backend/` scaffolded (FastAPI skeleton below)
-- [ ] `frontend/`, root `README.md` skeleton
+- [x] `frontend/` scaffolded, root `README.md` written (overview, live
+      links, architecture, data sources, status, local dev setup)
 
 ## Backend core
 - [x] FastAPI skeleton + `/health` endpoint + `requirements.txt` — verified locally,
@@ -144,11 +145,19 @@ behind anything marked as a real choice, not just what got built.
 - [ ] Custom domain: Route53 + ACM cert wired to CloudFront — deferred to
       the final polish pass (2026-07-28); use default CloudFront URL for
       now to unblock frontend deployment
-- [ ] External uptime monitor on `/health`
+- [x] External uptime monitor set up (UptimeRobot): frontend CloudFront
+      URL + backend `/health`. Bug caught immediately: UptimeRobot's HTTP
+      monitor defaults to `HEAD` requests, but `/health` only registered
+      `GET` (`405 Method Not Allowed` on HEAD) - Railway showed the
+      service as healthy while UptimeRobot reported it down, which is
+      what surfaced the mismatch. Fixed via `@app.api_route("/health",
+      methods=["GET", "HEAD"])`
 
 ## Polish (near end of main phase)
 - [ ] Honesty/labeling pass (dated/sourced figures, portfolio disclaimer)
 - [ ] Dockerize backend
 - [ ] GitHub Actions CI/CD (lint + test backend, build + S3 sync frontend)
 - [ ] Unit + integration tests
-- [ ] README with architecture + methodology
+- [x] README core content written early (not deferred - useful throughout
+      the build, not just at the end); final pass once WorldPop/custom
+      domain/etc. are resolved to update the "Status" section
