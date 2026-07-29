@@ -89,6 +89,16 @@ behind anything marked as a real choice, not just what got built.
       served MapLibre's web worker with an empty MIME type, browser refused
       to run it ("WebGL context was lost" / worker blocked). Fixed via
       `optimizeDeps: { exclude: ['maplibre-gl'] }` in `vite.config.ts`
+- [x] Second, different MapLibre+Vite issue found in the deployed
+      (production build) version, not dev: MapLibre resolves its worker via
+      `new URL('./maplibre-gl-worker.mjs', import.meta.url)` at runtime,
+      but Rollup's production build never emits that as a real file - the
+      404 was then masked by CloudFront's SPA fallback (404→index.html) as
+      a "wrong MIME type" module-load error. Fixed by copying the real
+      worker file from `node_modules/maplibre-gl/dist/` into
+      `frontend/public/assets/`, so Vite includes it verbatim at the exact
+      path the runtime expects on every build. Verified live: worker now
+      serves as `text/javascript`, not the HTML fallback.
 - [x] Four Phase 1 pages built with real API data: Dashboard (stat cards +
       map + fire list), Map (full-width), Fire Detail (per-fire map +
       exposure stats per band, "Pending" shown honestly where
