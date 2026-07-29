@@ -277,7 +277,12 @@ export function FireMap({
 
       if (fitToSelection && selectedFireId) {
         const selected = fires.find((f) => f.id === selectedFireId)
-        const coords = selected ? flattenCoords(selected.perimeter) : []
+        let coords = selected ? flattenCoords(selected.perimeter) : []
+        // A selected scene's real footprint (~250km swath) is easy to miss
+        // entirely at the fire's own zoom level - widen the fit to include
+        // it so the boundary is actually visible, not just present in data.
+        if (sceneFootprints?.before) coords = coords.concat(flattenCoords(sceneFootprints.before))
+        if (sceneFootprints?.after) coords = coords.concat(flattenCoords(sceneFootprints.after))
         if (coords.length) {
           const lons = coords.map((c) => c[0])
           const lats = coords.map((c) => c[1])

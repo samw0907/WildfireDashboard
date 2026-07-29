@@ -126,7 +126,7 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
                       key={s.id}
                       className={`scene-option${selectedBefore?.id === s.id ? ' scene-option--selected' : ''}`}
                       onClick={() => {
-                        setSelectedBefore(s)
+                        setSelectedBefore(selectedBefore?.id === s.id ? null : s)
                         setSelectedAfter(null)
                       }}
                     >
@@ -147,7 +147,7 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
                     <button
                       key={s.id}
                       className={`scene-option${selectedAfter?.id === s.id ? ' scene-option--selected' : ''}`}
-                      onClick={() => setSelectedAfter(s)}
+                      onClick={() => setSelectedAfter(selectedAfter?.id === s.id ? null : s)}
                     >
                       <span>{sceneLabel(s)}</span>
                       <span className={`coverage-badge coverage-badge--${coverageTier(s.aoi_coverage_percent)}`}>
