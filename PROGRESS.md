@@ -97,8 +97,12 @@ behind anything marked as a real choice, not just what got built.
       a "wrong MIME type" module-load error. Fixed by copying the real
       worker file from `node_modules/maplibre-gl/dist/` into
       `frontend/public/assets/`, so Vite includes it verbatim at the exact
-      path the runtime expects on every build. Verified live: worker now
-      serves as `text/javascript`, not the HTML fallback.
+      path the runtime expects on every build. Turned out to be two files,
+      not one - `maplibre-gl-shared.mjs` failed the same way after fixing
+      the worker file; checked both files' own source for further chained
+      dynamic references (none found) before redeploying a second time.
+      Verified live: both now serve as `text/javascript`, not the HTML
+      fallback.
 - [x] Four Phase 1 pages built with real API data: Dashboard (stat cards +
       map + fire list), Map (full-width), Fire Detail (per-fire map +
       exposure stats per band, "Pending" shown honestly where

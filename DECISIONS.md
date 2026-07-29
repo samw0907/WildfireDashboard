@@ -170,6 +170,17 @@ uncertain benefit — confirmed live that a sustained overload doesn't
 resolve within a single cycle's worth of retries anyway. Added a 2-second
 politeness delay between per-fire Overpass requests regardless.
 
+## CI/CD timing, revisited after manual-redeploy friction (2026-07-29)
+**Issue:** After two rounds of manual frontend redeploys (build, sync,
+invalidate) to chase the MapLibre worker bug, asked whether to move
+GitHub Actions automation up from "end of main phase" to now.
+**Decision:** Keep deferring. The friction is real but manageable while
+still actively iterating on frontend features; building the workflow now
+would divert time from remaining Phase 1 work (WorldPop retry, README,
+AWS budget alerts) for a convenience win that matters more once frontend
+changes become less frequent. Confirms the original [[feedback_infra_later]]
+pattern still holds even under real friction, not just in the abstract.
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands
