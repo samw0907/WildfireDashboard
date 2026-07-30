@@ -3,16 +3,12 @@ import { exposureAtBand, type Fire } from '../api'
 
 // Population filters use the 2400m band - the widest/most complete
 // estimate, same band already used elsewhere (table, popups) as the
-// headline exposure figure. Filtering on it will just show nothing
-// meaningful until the Census population lookup is live (population_est
-// is null for every fire right now), but the UI is ready for when it is.
+// headline exposure figure.
 const POPULATION_BAND = 2400
 
 export interface FiltersState {
   search: string
   state: string
-  cause: string
-  complexity: string
   minContained: string
   maxContained: string
   minAcres: string
@@ -24,8 +20,6 @@ export interface FiltersState {
 export const EMPTY_FILTERS: FiltersState = {
   search: '',
   state: '',
-  cause: '',
-  complexity: '',
   minContained: '',
   maxContained: '',
   minAcres: '',
@@ -38,8 +32,6 @@ export function applyFilters(fires: Fire[], f: FiltersState): Fire[] {
   return fires.filter((fire) => {
     if (f.search && !fire.name.toLowerCase().includes(f.search.toLowerCase())) return false
     if (f.state && fire.state !== f.state) return false
-    if (f.cause && fire.fire_cause !== f.cause) return false
-    if (f.complexity && fire.complexity_level !== f.complexity) return false
     if (f.minContained !== '' && (fire.percent_contained ?? -1) < Number(f.minContained)) return false
     if (f.maxContained !== '' && (fire.percent_contained ?? Infinity) > Number(f.maxContained)) return false
     if (f.minAcres !== '' && (fire.acres ?? -1) < Number(f.minAcres)) return false
@@ -54,7 +46,6 @@ export function applyFilters(fires: Fire[], f: FiltersState): Fire[] {
 }
 
 const MORE_FILTER_KEYS: (keyof FiltersState)[] = [
-  'complexity',
   'minContained',
   'maxContained',
   'minAcres',
@@ -77,8 +68,6 @@ export function FireFilters({ fires, filters, onChange }: FireFiltersProps) {
   const [expanded, setExpanded] = useState(false)
 
   const states = uniqueSorted(fires.map((f) => f.state))
-  const causes = uniqueSorted(fires.map((f) => f.fire_cause))
-  const complexities = uniqueSorted(fires.map((f) => f.complexity_level))
 
   const update = (patch: Partial<FiltersState>) => onChange({ ...filters, ...patch })
   const moreActiveCount = MORE_FILTER_KEYS.filter((k) => filters[k] !== '').length
@@ -102,14 +91,6 @@ export function FireFilters({ fires, filters, onChange }: FireFiltersProps) {
             </option>
           ))}
         </select>
-        <select value={filters.cause} onChange={(e) => update({ cause: e.target.value })}>
-          <option value="">All causes</option>
-          {causes.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
         <button className="filter-more-toggle" onClick={() => setExpanded((e) => !e)}>
           More filters{moreActiveCount > 0 ? ` (${moreActiveCount})` : ''}
         </button>
@@ -121,14 +102,6 @@ export function FireFilters({ fires, filters, onChange }: FireFiltersProps) {
       </div>
       {expanded && (
         <div className="filter-more-panel">
-          <select value={filters.complexity} onChange={(e) => update({ complexity: e.target.value })}>
-            <option value="">Any complexity</option>
-            {complexities.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
           <div className="filter-range">
             <span>Contained %</span>
             <input

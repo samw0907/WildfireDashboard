@@ -114,6 +114,11 @@ export function FireMap({
       style: 'https://tiles.openfreemap.org/styles/liberty',
       center: [-98.5, 39.8],
       zoom: 3,
+      // Requires Ctrl/Cmd+scroll to zoom (shows an on-map hint on a plain
+      // scroll instead) - without this, scrolling the page with the mouse
+      // over a large embedded map hijacks the scroll as a zoom gesture
+      // instead, making it hard to scroll past the map at all.
+      cooperativeGestures: true,
     })
     mapRef.current = map
 

@@ -255,6 +255,28 @@
   text-align: center;
 }
 
+.page-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid var(--bg-hover);
+  border-top-color: var(--accent-green);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .page-error {
   color: var(--accent-red);
 }
@@ -333,6 +355,36 @@
   font-weight: 400;
   margin-left: 4px;
   color: var(--text-muted);
+}
+
+.impact-card {
+  min-width: 220px;
+}
+
+.impact-card .stat-label {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.impact-numbers {
+  display: flex;
+  gap: 18px;
+  margin-top: 2px;
+}
+
+.impact-number {
+  display: flex;
+  flex-direction: column;
+}
+
+.impact-value {
+  font-size: 20px;
+}
+
+.impact-number-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .stat-label {
@@ -480,6 +532,60 @@
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
+  /* Default OS scrollbars are thin/easy to miss - make it obvious this
+     table scrolls sideways once it's wider than its container. */
+  scrollbar-width: auto;
+  scrollbar-color: var(--accent-green) var(--bg-hover);
+}
+
+.fire-table-wrap::-webkit-scrollbar {
+  height: 12px;
+}
+
+.fire-table-wrap::-webkit-scrollbar-track {
+  background: var(--bg-hover);
+}
+
+.fire-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--accent-green);
+  border-radius: 6px;
+}
+
+.table-load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.table-load-more button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.table-load-more button:hover {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.info-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: help;
+  vertical-align: middle;
 }
 
 .fire-table {

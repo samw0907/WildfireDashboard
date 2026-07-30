@@ -387,3 +387,42 @@ loop scene picking instead.
       age) + a status pill in the top bar (pulsing green/amber/red),
       fail-safe to "disconnected" if the backend itself is unreachable.
       Frontend deployed; backend push still pending as of this note.
+
+## Dashboard/table UX polish batch (2026-07-30)
+- [x] **Map scroll-zoom fix**: `cooperativeGestures: true` (MapLibre's
+      built-in option for exactly this) - scrolling the page with the
+      mouse over the embedded map no longer hijacks the scroll as a zoom
+      gesture; requires Ctrl/Cmd+scroll to zoom instead, with an on-map
+      hint shown on a plain scroll attempt.
+- [x] **Table decluttered**: Cause and Complexity columns removed (kept
+      on Fire Detail only, where they still show) - not particularly
+      NatCat-relevant for the at-a-glance table. Their sort keys and the
+      corresponding filter-bar dropdowns were removed too, not just the
+      column, to avoid orphaned filters for values no longer visible in
+      the table.
+- [x] Table horizontal scrollbar made visually obvious (thicker, themed) -
+      `overflow-x: auto` was already there, but the default thin OS
+      scrollbar was easy to miss entirely.
+- [x] **Dashboard running totals**: buildings/population "impacted"
+      (within perimeter) and "under threat" (2.4km) added as two-number
+      combined cards alongside the existing Active Fires/Total Acres
+      cards, rather than four separate cards. Includes a live caveat
+      ("Population totals still filling in (X of Y fires processed)")
+      that disappears on its own once the Census backfill finishes.
+- [x] **Incident complexity explained**: NIMS Type 1-5 scale is
+      counterintuitive (Type 1 = biggest/most complex, Type 5 = smallest)
+      - added an info-hint on the Fire Detail badge plus a full
+      explanation section in Reference.
+- [x] **Reusable info-hint ("?") tooltip** - applied only where the field
+      genuinely isn't self-explanatory: priority score, population
+      methodology, incident complexity. Deliberately not applied to
+      self-explanatory fields (acreage, dates) per explicit direction.
+- [x] **Table pagination**: loads 100 rows initially, "Load 100 more"
+      button below - implemented as a display-window slice over the
+      already fully filtered+sorted array (filtering/sorting already
+      operate over the complete in-memory list), so correctness against
+      filters/sort was never at risk. Resets to the first 100 whenever
+      the filtered set changes.
+- [x] **Loading spinner**: replaced plain "Loading…" text with a CSS
+      spinner (`PageLoading` component) on Dashboard and Fire Detail -
+      some fetches take up to ~10s, worth a real indicator.

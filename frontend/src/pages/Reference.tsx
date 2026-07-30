@@ -107,6 +107,37 @@ export function Reference() {
         </p>
       </section>
 
+      <section>
+        <h2>Incident complexity levels</h2>
+        <p>
+          Fire pages show a "Type" badge (Type 1 through Type 5) sourced directly from NIFC -
+          this is the standard NIMS/ICS incident complexity scale used across US wildland fire
+          agencies, and the numbering is counterintuitive: <strong>lower is bigger</strong>.
+        </p>
+        <ul>
+          <li>
+            <strong>Type 1</strong> - the most complex: a nationally significant incident,
+            national resources committed, can run for weeks or months.
+          </li>
+          <li>
+            <strong>Type 2</strong> - a regionally significant incident, beyond local control,
+            expected to run multiple operational periods.
+          </li>
+          <li>
+            <strong>Type 3</strong> - an extended-attack incident, larger than an initial
+            response but not requiring the full command structure of Type 1/2.
+          </li>
+          <li>
+            <strong>Type 4</strong> - an initial-attack incident, managed with local resources
+            only.
+          </li>
+          <li>
+            <strong>Type 5</strong> - the smallest: typically 5 or fewer people needed to manage
+            it.
+          </li>
+        </ul>
+      </section>
+
       <section id="population-methodology">
         <h2>How population estimates are calculated (and where they're weakest)</h2>
         <p>

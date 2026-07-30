@@ -4,6 +4,9 @@ import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWe
 import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
 import { AcquisitionPanel } from '../components/AcquisitionPanel'
+import { PageLoading } from '../components/PageLoading'
+import { InfoHint } from '../components/InfoHint'
+import { COMPLEXITY_HELP } from '../helpText'
 import {
   BuildingIcon,
   PeopleIcon,
@@ -73,7 +76,7 @@ export function FireDetail() {
   if (error) {
     return <div className="page-error">Fire not found, or the backend is temporarily unavailable.</div>
   }
-  if (!fire) return <div className="page-loading">Loading…</div>
+  if (!fire) return <PageLoading />
 
   return (
     <div className="fire-detail">
@@ -94,7 +97,12 @@ export function FireDetail() {
         )}
         {fire.percent_contained != null && <span className="badge">{fire.percent_contained}% contained</span>}
         {fire.fire_cause && <span className="badge">Cause: {fire.fire_cause}</span>}
-        {fire.complexity_level && <span className="badge">{fire.complexity_level}</span>}
+        {fire.complexity_level && (
+          <span className="badge">
+            {fire.complexity_level}
+            <InfoHint text={COMPLEXITY_HELP} />
+          </span>
+        )}
         {fire.discovered_date && (
           <span className="badge">
             {Math.max(0, Math.floor((Date.now() - new Date(fire.discovered_date).getTime()) / 86_400_000))} days
