@@ -141,8 +141,12 @@ export interface AcquisitionCandidates {
 
 export interface Acquisition {
   status: 'marked' | 'confirmed' | null
-  before_scene: Scene | null
-  after_scene: Scene | null
+  before_scenes: Scene[]
+  after_scenes: Scene[]
+  // 'composite' (3+3, real median-compositing benefit) | 'single_pair'
+  // (1+1, fallback when a track can't support 3) | null if nothing
+  // selected yet - deliberately no in-between size, see SAR_METHODOLOGY.md §8.
+  mode: 'composite' | 'single_pair' | null
   confirmed_at: string | null
 }
 
@@ -158,7 +162,7 @@ export function markForAcquisition(id: string): Promise<unknown> {
   return authenticatedRequest(`/api/fires/${id}/acquisition/mark`, { method: 'POST' })
 }
 
-export function selectAcquisitionScenes(id: string, before: Scene, after: Scene): Promise<unknown> {
+export function selectAcquisitionScenes(id: string, before: Scene[], after: Scene[]): Promise<unknown> {
   return authenticatedRequest(`/api/fires/${id}/acquisition/select`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -50,9 +50,9 @@ export function FireDetail() {
   const [fire, setFire] = useState<FireDetailData | null>(null)
   const [error, setError] = useState(false)
   const [weather, setWeather] = useState<FireWeather | null>(null)
-  const [acquisitionScenes, setAcquisitionScenes] = useState<{ before: Scene | null; after: Scene | null }>({
-    before: null,
-    after: null,
+  const [acquisitionScenes, setAcquisitionScenes] = useState<{ before: Scene[]; after: Scene[] }>({
+    before: [],
+    after: [],
   })
 
   useEffect(() => {
@@ -117,7 +117,10 @@ export function FireDetail() {
             selectedFireId={fire.id}
             fitToSelection
             buffers={fire.buffers}
-            sceneFootprints={{ before: acquisitionScenes.before?.footprint, after: acquisitionScenes.after?.footprint }}
+            sceneFootprints={{
+              before: acquisitionScenes.before.map((s) => s.footprint).filter((f): f is GeoJSON.Geometry => f != null),
+              after: acquisitionScenes.after.map((s) => s.footprint).filter((f): f is GeoJSON.Geometry => f != null),
+            }}
           />
           {weather?.wind.direction_degrees != null && (
             <div
@@ -141,16 +144,16 @@ export function FireDetail() {
               <span>{weather.wind.speed_mph} mph</span>
             </div>
           )}
-          {(acquisitionScenes.before || acquisitionScenes.after) && (
+          {(acquisitionScenes.before.length > 0 || acquisitionScenes.after.length > 0) && (
             <div className="scene-legend">
-              {acquisitionScenes.before && (
+              {acquisitionScenes.before.length > 0 && (
                 <span>
-                  <span className="scene-legend-swatch scene-legend-swatch--before" /> Before scene
+                  <span className="scene-legend-swatch scene-legend-swatch--before" /> Before scene(s)
                 </span>
               )}
-              {acquisitionScenes.after && (
+              {acquisitionScenes.after.length > 0 && (
                 <span>
-                  <span className="scene-legend-swatch scene-legend-swatch--after" /> After scene
+                  <span className="scene-legend-swatch scene-legend-swatch--after" /> After scene(s)
                 </span>
               )}
             </div>

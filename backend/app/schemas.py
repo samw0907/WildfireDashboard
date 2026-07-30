@@ -95,12 +95,22 @@ class AcquisitionCandidatesOut(BaseModel):
 
 
 class AcquisitionSelectIn(BaseModel):
-    before: SceneIn
-    after: SceneIn
+    # Exactly 3 each for Composite mode (median compositing - needs >=3 for
+    # real outlier-robustness), or exactly 1 each for Single-pair fallback
+    # when a track can't support 3. Deliberately no "2" tier - median of 2
+    # is mathematically identical to a mean, so it would look more
+    # rigorous than a single pair while providing the same zero
+    # outlier-robustness. See SAR_METHODOLOGY.md §8.
+    before: list[SceneIn]
+    after: list[SceneIn]
 
 
 class AcquisitionOut(BaseModel):
     status: str | None
-    before_scene: SceneOut | None
-    after_scene: SceneOut | None
+    before_scenes: list[SceneOut]
+    after_scenes: list[SceneOut]
+    # 'composite' (3+3) | 'single_pair' (1+1) | None if nothing selected yet -
+    # derived from list length so the frontend doesn't need to reimplement
+    # that logic itself.
+    mode: str | None
     confirmed_at: datetime | None

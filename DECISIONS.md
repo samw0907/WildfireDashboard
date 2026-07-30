@@ -483,6 +483,194 @@ needs the *existing* LAwildfireSAR Dockerfile (Ubuntu + ESA SNAP) as the
 ephemeral compute image — that's a real, purpose-built need, not the
 generic "containerize the web backend" task that was originally listed.
 
+## SAR compute dispatch — full architecture + methodology decisions (2026-07-30)
+
+**Context for a future session picking this up**: this is the very next
+build phase after everything in "Priority-fire identification + SAR
+acquisition trigger" above. The mark-for-acquisition workflow (live CDSE
+scene search, before/after picker, AOI coverage %, footprint outlines on
+the map) is fully built and deployed. What's described below is the
+**next thing to build**: actually dispatching SAR processing compute when
+"Confirm & proceed" is clicked, and displaying results. **See
+`SAR_METHODOLOGY.md` for the full scientific reasoning behind every
+decision below** — that doc is long and deliberately thorough (read it
+fully before touching this feature); this entry is the shorter
+decisions-log version for quick reference. Do not skip reading
+`SAR_METHODOLOGY.md` — it contains critical analysis (§5) and the
+building-footprint/threshold/fallback reasoning (§6-8) that isn't
+repeated in full here.
+
+### Compute platform: AWS, not Google Earth Engine
+Google Earth Engine was seriously considered (user has prior experience
+with it from MatoGrossoCarbon/PreyLangCambodia). Verified live against
+Earth Engine's own dataset docs: GEE's native `COPERNICUS/S1_GRD` applies
+thermal noise removal, radiometric calibration, and **geometric** terrain
+correction only — not radiometric terrain flattening (gamma0/RTC), which
+is exactly what the existing `LAwildfireSAR` pipeline's pyroSAR/SNAP step
+does and is a meaningful accuracy difference in mountainous wildfire
+terrain. GEE's noncommercial compute is free with a monthly quota that
+throttles (doesn't bill) past the limit — genuinely safer than AWS in that
+one respect, but not the deciding factor once the user confirmed AWS cost
+is a non-issue at demo scale (2-3 fires, fully human-triggered, nothing
+auto-runs). **Decision: AWS**, specifically to preserve the RTC step the
+original pipeline was actually validated with, not re-derive a simpler
+approach for a use case where cost wasn't the binding constraint anyway.
+
+### Architecture: AWS Batch on Fargate
+- **Compute**: AWS Batch, **Fargate-backed** (not EC2-backed) — the
+  existing Dockerfile (Ubuntu 24.04 + SNAP headless GPT + GDAL + Python
+  3.11) has no GPU/kernel-module requirements, so there's no reason to
+  manage EC2 AMIs ourselves. Fargate's resource ceiling (up to 16 vCPU /
+  120GB memory) comfortably covers a single job. Batch (vs. raw
+  `boto3.run_instances`) gives job timeouts, retries, and CloudWatch Logs
+  for free.
+- **Hard job timeout** (recommend ~6 hours) as a safety cap — belt-and-
+  suspenders on top of "nothing auto-triggers," so even a genuinely stuck
+  job can't silently run/cost forever.
+- **Registry**: push the existing Dockerfile to ECR (one-time setup).
+- **Trigger**: the already-admin-gated `/confirm` endpoint calls
+  `boto3.client('batch').submit_job(...)`, passing the 6 (or 2, see
+  fallback design below) scene product IDs + fire ID as container
+  overrides/env vars.
+- **Pipeline adaptation**: a new lightweight entrypoint replaces
+  `scripts/run_processing.py`'s config-file-driven orchestration — it
+  takes exact scene IDs already chosen by the human via the picker (no
+  track search/selection needed at compute time, that already happened in
+  the UI), downloads just those, RTC-processes, composites (or skips
+  compositing — see fallback design), change-detects, classifies
+  buildings, and skips `validate.py` entirely (no ground truth exists for
+  a live fire — see `SAR_METHODOLOGY.md` §3/§7).
+- **Results**: sync to S3 (reusing the `sync_to_s3.py` pattern already
+  built in `LAwildfireSAR`). A **new background polling loop** — same
+  `asyncio` pattern already used for ingestion/exposure/alerts, not a new
+  AWS service (no EventBridge/Lambda/webhooks) — checks
+  `batch.describe_jobs()` for in-progress acquisitions and updates the DB
+  once a job reaches `SUCCEEDED`/`FAILED`.
+- **Cost estimate**: ~$0.30-0.55/hour Fargate-equivalent sizing, ~1.5-3
+  hours per fire scaled from the original pipeline's "4-6 hours for 6
+  scenes across 2 events" baseline → **roughly $1.50-5 total for 3 demo
+  fires**. No measured runtime exists yet — first real run should be
+  treated as the number to actually trust, this is a placeholder estimate.
+
+### Composite size: fixed 3 scenes per side, not flexible
+Median compositing requires **at least 3** dates to provide any real
+outlier-robustness — median of 2 values is mathematically identical to
+their average, so a "flexible 2-5" option (raised and corrected during
+discussion) would have silently included a tier that buys nothing over a
+single scene. Fixed 3 was chosen over flexible 3-5 for simplicity: it
+matches exactly what the original pipeline validated, keeps the picker UI
+and cost/runtime estimate constant across every fire, and the "not enough
+candidates" edge case has to be handled either way (see fallback design
+below) so fixed doesn't carry more real risk than flexible would have.
+
+### Building footprint dataset: OpenStreetMap, not Microsoft Global ML Building Footprints
+The original pipeline's validated F1 ≈ 0.80 is tied to Microsoft's
+footprint geometries specifically (zonal-stats sampling is sensitive to
+exact polygon edges) and does not transfer to OSM even in principle.
+Decided to use OSM anyway because: (a) using a different building dataset
+than the dashboard's existing exposure feature would mean two different
+building inventories for the same fire visible on the same page — a
+coherence problem worse than the F1 loss for a portfolio piece; (b)
+Microsoft's footprints are large per-state static files, not a queryable
+API, and would require new download/storage infrastructure this project
+has deliberately avoided; (c) **confirmed we already have what's needed**
+— `overpass.py` builds real `shapely.Polygon` geometries (not just
+points/counts) from OSM way data, already cached per fire in
+`building_cache` at the 2400m buffer extent, comfortably covering
+anything near the perimeter. No new building-data pipeline is needed at
+all, just reuse of what the existing exposure feature already fetches.
+The F1 loss is judged acceptable specifically because §3 of
+`SAR_METHODOLOGY.md` already means that number can't be fully claimed for
+a new fire regardless of building dataset (no per-fire ground truth
+either way) — document this wherever SAR results are surfaced: not "this
+achieves F1 0.80" but "this method achieved F1 0.80 in validated
+conditions against a different building dataset; applied here without
+per-fire validation."
+
+### Damage threshold: fixed inherited value, no auto-calibration
+The original pipeline's 2.9 dB / 1.74 dB thresholds were empirically
+calibrated against **CAL FIRE DINS** — real human building-inspection
+records, available only weeks after containment and only for California.
+No equivalent ground truth exists for an arbitrary new fire in real time,
+anywhere in the US, ever, in most cases. An "auto-recalibrate" button was
+proposed and discussed in depth — rejected for now specifically because
+threshold calibration requires something to calibrate *against*
+(precision/recall computation needs known-true labels), not because it's
+too much engineering effort. **Decision: use the fixed 2.9 dB / 1.74 dB
+values inherited from the original pipeline, explicitly documented
+everywhere as not independently validated for whatever new fire they're
+applied to.** Two weaker future substitutes were discussed and logged to
+`PROGRESS.md` backlog rather than built now: (1) loose recalibration
+against publicly reported aggregate "structures destroyed" counts, if/when
+available for a specific fire (much weaker than DINS — confirms total
+count, not that the *right* buildings were flagged); (2) a manual
+"reprocess with a different threshold" control for later, if real outcome
+data for a specific fire ever surfaces.
+
+### Fallback design: not every track will have 3 scenes available on both sides
+Real risk, discussed in depth rather than assumed away. Empirical
+grounding: live tests this session (Aspen Acres fire) showed ~12
+candidate scenes across 4 tracks in a 21-day "before" window — averaging
+~3 dates/track, consistent with Sentinel-1's current ~6-day effective
+revisit with two operational satellites (S1C/S1D) sharing the same ground
+tracks 180° out of phase. So 3-per-track is often achievable today, but
+not guaranteed — satellite outages, edge-of-swath geography, or timing
+luck relative to a fire's discovery date will occasionally leave a track
+short, especially on the "after" side for a very recently discovered fire.
+
+**Decided mechanism** (built and verified live 2026-07-30 — see `PROGRESS.md` Phase A/B for the full build/test record):
+1. **Surface track sufficiency proactively in the picker**, before
+   individual scene selection — a per-track summary computed client-side
+   from the candidates the API already returns (`relative_orbit` is
+   already in the response, no backend change needed for this part):
+   e.g. "Track 64 (ASCENDING): 3 before, 4 after" / "Track 151
+   (ASCENDING): 2 before, 1 after." Lets the user spot the best track at a
+   glance instead of counting manually.
+2. **Exactly two supported modes, no ambiguous middle tier**: **Composite**
+   (exactly 3+3, preferred, real median-compositing benefit) or
+   **Single-pair** (exactly 1+1, fallback). Deliberately no "2" tier — it
+   would look more rigorous than a single pair while providing the exact
+   same zero outlier-robustness as median-of-2 (see composite-size
+   reasoning above).
+3. Picker auto-switches into Single-pair mode (select exactly 1 each side
+   instead of 3) when the chosen track can't support Composite, with a
+   visible warning: *"Only single before/after scenes available on this
+   track — results won't benefit from multi-date noise averaging and may
+   be less reliable."*
+4. **Backend `/select` schema** needs to accept either exactly 3 or
+   exactly 1 scene per side (same track across whichever count) — not
+   always-3 as originally scoped before this discussion.
+5. **Compute pipeline branches on mode**: Composite mode runs
+   `composite.py`'s median build before change detection; Single-pair mode
+   skips compositing entirely and feeds the one RTC-processed scene per
+   side straight into `change.py`'s log-ratio step. Everything downstream
+   (buildings classification, thresholding) is identical either way.
+6. **Results must visibly label which mode ran** — "Composite (3+3)" vs.
+   "Single-pair (1+1) — reduced reliability" — never ambiguous after the
+   fact once a job completes.
+
+### Search window: 14-day minimum floor added to the "after" window
+The original pipeline deliberately avoided any post-fire scene earlier
+than 14 days after ignition — imagery taken sooner picks up confounding
+signals from active firefighting (retardant, emergency vehicles, debris
+disturbance) rather than the structural change being measured. **Our
+current `AFTER_WINDOW` in `routers/acquisition.py` starts at the fire's
+discovery date (day 0) with no floor — this needs the same 14-day minimum
+added** before the fallback/picker rework ships, not after.
+
+### Confirmed out of scope / explicitly not building right now
+- Automated orbit/track selection (confirmed weeks ago — genuine
+  geometry/ML research problem, human-in-the-loop by design).
+- SAR interferometric coherence as an alternative/supplement to intensity
+  change detection (real methodological alternative per
+  `SAR_METHODOLOGY.md` §5, needs SLC data + interferometric
+  co-registration, a substantially bigger technical lift, not in scope).
+- Vegetation/burn-scar confound mitigation (identified as a real gap in
+  `SAR_METHODOLOGY.md` §5, not addressed by the original pipeline either,
+  logged as a known limitation rather than solved).
+- Any masking/reweighting of the flat single-threshold-for-all-buildings
+  approach by building size (identified as a real limitation, not fixed).
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands

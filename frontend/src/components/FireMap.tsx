@@ -18,10 +18,11 @@ interface FireMapProps {
   // Fire Weather Watch layer - opt-in so Fire Detail's tiny zoomed-in map
   // doesn't fetch a nationwide layer it has no use for.
   enableAlerts?: boolean
-  // Real Sentinel-1 scene footprints (before/after), for visual context
-  // while picking acquisition scenes - outline only, not filled, since a
-  // full IW swath is ~250km wide and would otherwise dominate the view.
-  sceneFootprints?: { before?: GeoJSON.Geometry | null; after?: GeoJSON.Geometry | null }
+  // Real Sentinel-1 scene footprints (before/after) - up to 3 each in
+  // Composite mode, 1 each in Single-pair mode - for visual context while
+  // picking acquisition scenes. Outline only, not filled, since a full IW
+  // swath is ~250km wide and would otherwise dominate the view.
+  sceneFootprints?: { before?: GeoJSON.Geometry[]; after?: GeoJSON.Geometry[] }
 }
 
 const SOURCE_ID = 'fires'
@@ -271,9 +272,9 @@ export function FireMap({
         alertsSource.setData(alerts)
       }
 
-      const toFeatureCollection = (geometry?: GeoJSON.Geometry | null): GeoJSON.FeatureCollection => ({
+      const toFeatureCollection = (geometries?: GeoJSON.Geometry[]): GeoJSON.FeatureCollection => ({
         type: 'FeatureCollection',
-        features: geometry ? [{ type: 'Feature', geometry, properties: {} }] : [],
+        features: (geometries ?? []).map((geometry) => ({ type: 'Feature', geometry, properties: {} })),
       })
       const beforeSource = map.getSource(SCENE_BEFORE_SOURCE_ID) as GeoJSONSource | undefined
       beforeSource?.setData(toFeatureCollection(sceneFootprints?.before))
@@ -286,8 +287,8 @@ export function FireMap({
         // A selected scene's real footprint (~250km swath) is easy to miss
         // entirely at the fire's own zoom level - widen the fit to include
         // it so the boundary is actually visible, not just present in data.
-        if (sceneFootprints?.before) coords = coords.concat(flattenCoords(sceneFootprints.before))
-        if (sceneFootprints?.after) coords = coords.concat(flattenCoords(sceneFootprints.after))
+        for (const geom of sceneFootprints?.before ?? []) coords = coords.concat(flattenCoords(geom))
+        for (const geom of sceneFootprints?.after ?? []) coords = coords.concat(flattenCoords(geom))
         if (coords.length) {
           const lons = coords.map((c) => c[0])
           const lats = coords.map((c) => c[1])

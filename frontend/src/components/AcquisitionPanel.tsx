@@ -11,9 +11,16 @@ import {
   type Scene,
 } from '../api'
 
+// Composite mode (3+3) needs at least 3 dates per side for median
+// compositing to provide real outlier-robustness - median of 2 is
+// mathematically identical to a mean, so there's no "2" tier. Single-pair
+// (1+1) is the only fallback. See SAR_METHODOLOGY.md §8.
+const COMPOSITE_COUNT = 3
+const SINGLE_PAIR_COUNT = 1
+
 function sceneLabel(s: Scene): string {
   const date = new Date(s.date).toLocaleDateString()
-  return `${date} · ${s.orbit_direction ?? 'unknown'} · track ${s.relative_orbit ?? '?'}`
+  return `${date} · ${s.orbit_direction ?? 'unknown'}`
 }
 
 // Full AOI coverage (not just bbox-touching) matters more than anything
@@ -26,61 +33,112 @@ function coverageTier(percent: number | null): 'good' | 'warn' | 'bad' | 'unknow
   return 'bad'
 }
 
+interface TrackSummary {
+  track: number
+  direction: string | null
+  beforeCount: number
+  afterCount: number
+  eligibleForComposite: boolean
+}
+
+function computeTrackSummaries(candidates: AcquisitionCandidates): TrackSummary[] {
+  const byTrack = new Map<number, TrackSummary>()
+  const bump = (s: Scene, side: 'beforeCount' | 'afterCount') => {
+    if (s.relative_orbit == null) return
+    const existing = byTrack.get(s.relative_orbit)
+    if (existing) {
+      existing[side]++
+    } else {
+      byTrack.set(s.relative_orbit, {
+        track: s.relative_orbit,
+        direction: s.orbit_direction,
+        beforeCount: 0,
+        afterCount: 0,
+        eligibleForComposite: false,
+        [side]: 1,
+      } as TrackSummary)
+    }
+  }
+  candidates.before.forEach((s) => bump(s, 'beforeCount'))
+  candidates.after.forEach((s) => bump(s, 'afterCount'))
+
+  return Array.from(byTrack.values())
+    .map((t) => ({ ...t, eligibleForComposite: t.beforeCount >= COMPOSITE_COUNT && t.afterCount >= COMPOSITE_COUNT }))
+    .sort((a, b) => {
+      if (a.eligibleForComposite !== b.eligibleForComposite) return a.eligibleForComposite ? -1 : 1
+      return b.beforeCount + b.afterCount - (a.beforeCount + a.afterCount)
+    })
+}
+
+function modeLabel(mode: Acquisition['mode']): string {
+  if (mode === 'composite') return 'Composite (3+3)'
+  if (mode === 'single_pair') return 'Single-pair (1+1) — reduced reliability'
+  return ''
+}
+
 interface AcquisitionPanelProps {
   fireId: string
   // Reports whichever before/after scenes are currently relevant (mid-
   // selection, or already saved) so the parent can draw their real
   // footprints on the map for visual context.
-  onScenesChange?: (scenes: { before: Scene | null; after: Scene | null }) => void
+  onScenesChange?: (scenes: { before: Scene[]; after: Scene[] }) => void
 }
 
 export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelProps) {
   const [acquisition, setAcquisition] = useState<Acquisition | null>(null)
   const [candidates, setCandidates] = useState<AcquisitionCandidates | null>(null)
-  const [selectedBefore, setSelectedBefore] = useState<Scene | null>(null)
-  const [selectedAfter, setSelectedAfter] = useState<Scene | null>(null)
+  const [selectedTrack, setSelectedTrack] = useState<number | null>(null)
+  const [selectedBefore, setSelectedBefore] = useState<Scene[]>([])
+  const [selectedAfter, setSelectedAfter] = useState<Scene[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     onScenesChange?.({
-      before: selectedBefore ?? acquisition?.before_scene ?? null,
-      after: selectedAfter ?? acquisition?.after_scene ?? null,
+      before: selectedBefore.length > 0 ? selectedBefore : acquisition?.before_scenes ?? [],
+      after: selectedAfter.length > 0 ? selectedAfter : acquisition?.after_scenes ?? [],
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBefore, selectedAfter, acquisition?.before_scene, acquisition?.after_scene])
+  }, [selectedBefore, selectedAfter, acquisition?.before_scenes, acquisition?.after_scenes])
 
   const loadAcquisition = () => getAcquisition(fireId).then(setAcquisition).catch(() => setAcquisition(null))
+
+  const resetLocalSelection = () => {
+    setSelectedTrack(null)
+    setSelectedBefore([])
+    setSelectedAfter([])
+  }
 
   useEffect(() => {
     setAcquisition(null)
     setCandidates(null)
-    setSelectedBefore(null)
-    setSelectedAfter(null)
+    resetLocalSelection()
     setError(null)
     loadAcquisition()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fireId])
 
   useEffect(() => {
-    if (acquisition?.status && !acquisition.before_scene) {
+    if (acquisition?.status && acquisition.before_scenes.length === 0) {
       getAcquisitionCandidates(fireId)
         .then(setCandidates)
         .catch(() => setError('Could not load candidate Sentinel-1 scenes.'))
     }
-  }, [acquisition?.status, acquisition?.before_scene, fireId])
+  }, [acquisition?.status, acquisition?.before_scenes, fireId])
 
-  // Same relative orbit guarantees identical viewing geometry between the
-  // before/after pair - falls back to same orbit direction if no after
-  // scene shares the exact track yet, matching the original pipeline's
-  // real constraint (see DECISIONS.md).
-  const filteredAfter = useMemo(() => {
-    if (!candidates) return []
-    if (!selectedBefore) return candidates.after
-    const sameTrack = candidates.after.filter((s) => s.relative_orbit === selectedBefore.relative_orbit)
-    if (sameTrack.length > 0) return sameTrack
-    return candidates.after.filter((s) => s.orbit_direction === selectedBefore.orbit_direction)
-  }, [candidates, selectedBefore])
+  const trackSummaries = useMemo(() => (candidates ? computeTrackSummaries(candidates) : []), [candidates])
+
+  const activeTrackSummary = trackSummaries.find((t) => t.track === selectedTrack) ?? null
+  const targetCount = activeTrackSummary?.eligibleForComposite ? COMPOSITE_COUNT : SINGLE_PAIR_COUNT
+
+  const trackBefore = useMemo(
+    () => (candidates && selectedTrack != null ? candidates.before.filter((s) => s.relative_orbit === selectedTrack) : []),
+    [candidates, selectedTrack],
+  )
+  const trackAfter = useMemo(
+    () => (candidates && selectedTrack != null ? candidates.after.filter((s) => s.relative_orbit === selectedTrack) : []),
+    [candidates, selectedTrack],
+  )
 
   async function run(action: () => Promise<unknown>, failureMessage: string) {
     setBusy(true)
@@ -92,6 +150,14 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
       setError(failureMessage)
     } finally {
       setBusy(false)
+    }
+  }
+
+  function toggleScene(list: Scene[], setList: (s: Scene[]) => void, scene: Scene) {
+    if (list.some((s) => s.id === scene.id)) {
+      setList(list.filter((s) => s.id !== scene.id))
+    } else if (list.length < targetCount) {
+      setList([...list, scene])
     }
   }
 
@@ -112,23 +178,62 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
         </button>
       )}
 
-      {acquisition.status && !acquisition.before_scene && (
+      {acquisition.status && acquisition.before_scenes.length === 0 && (
         <div className="scene-picker">
           {!candidates && <p className="page-subtitle">Searching for candidate Sentinel-1 scenes…</p>}
-          {candidates && (
+
+          {candidates && selectedTrack === null && (
             <>
+              <p className="page-subtitle">
+                Pick a track. Every scene composited together must share the same viewing geometry - tracks with 3+
+                scenes on both sides support the more reliable Composite mode; others fall back to a single
+                before/after pair.
+              </p>
+              {trackSummaries.length === 0 && <p className="page-subtitle">No candidate scenes found in range.</p>}
+              <div className="track-list">
+                {trackSummaries.map((t) => (
+                  <button key={t.track} className="track-option" onClick={() => setSelectedTrack(t.track)}>
+                    <span>
+                      Track {t.track} ({t.direction ?? 'unknown'})
+                    </span>
+                    <span>
+                      {t.beforeCount} before, {t.afterCount} after
+                    </span>
+                    <span className={`track-badge track-badge--${t.eligibleForComposite ? 'good' : 'warn'}`}>
+                      {t.eligibleForComposite ? 'Composite-ready' : 'Single-pair only'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {candidates && selectedTrack !== null && (
+            <>
+              <div className="track-active-bar">
+                <span>
+                  Track {selectedTrack} — {targetCount === COMPOSITE_COUNT ? 'Composite mode (3+3)' : 'Single-pair mode (1+1)'}
+                </span>
+                <button className="acquisition-cancel-btn" onClick={resetLocalSelection}>
+                  Change track
+                </button>
+              </div>
+              {targetCount === SINGLE_PAIR_COUNT && (
+                <p className="acquisition-warning">
+                  Only single before/after scenes available on this track - results won't benefit from multi-date
+                  noise averaging and may be less reliable.
+                </p>
+              )}
               <div className="scene-picker-columns">
                 <div className="scene-picker-column">
-                  <h4>Before ({candidates.before.length})</h4>
-                  {candidates.before.length === 0 && <p className="page-subtitle">No scenes found.</p>}
-                  {candidates.before.map((s) => (
+                  <h4>
+                    Before ({selectedBefore.length}/{targetCount})
+                  </h4>
+                  {trackBefore.map((s) => (
                     <button
                       key={s.id}
-                      className={`scene-option${selectedBefore?.id === s.id ? ' scene-option--selected' : ''}`}
-                      onClick={() => {
-                        setSelectedBefore(selectedBefore?.id === s.id ? null : s)
-                        setSelectedAfter(null)
-                      }}
+                      className={`scene-option${selectedBefore.some((x) => x.id === s.id) ? ' scene-option--selected' : ''}`}
+                      onClick={() => toggleScene(selectedBefore, setSelectedBefore, s)}
                     >
                       <span>{sceneLabel(s)}</span>
                       <span className={`coverage-badge coverage-badge--${coverageTier(s.aoi_coverage_percent)}`}>
@@ -138,16 +243,14 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
                   ))}
                 </div>
                 <div className="scene-picker-column">
-                  <h4>After ({filteredAfter.length})</h4>
-                  {selectedBefore && filteredAfter.length === 0 && (
-                    <p className="page-subtitle">No matching-track after scene yet.</p>
-                  )}
-                  {!selectedBefore && <p className="page-subtitle">Pick a before scene first.</p>}
-                  {filteredAfter.map((s) => (
+                  <h4>
+                    After ({selectedAfter.length}/{targetCount})
+                  </h4>
+                  {trackAfter.map((s) => (
                     <button
                       key={s.id}
-                      className={`scene-option${selectedAfter?.id === s.id ? ' scene-option--selected' : ''}`}
-                      onClick={() => setSelectedAfter(selectedAfter?.id === s.id ? null : s)}
+                      className={`scene-option${selectedAfter.some((x) => x.id === s.id) ? ' scene-option--selected' : ''}`}
+                      onClick={() => toggleScene(selectedAfter, setSelectedAfter, s)}
                     >
                       <span>{sceneLabel(s)}</span>
                       <span className={`coverage-badge coverage-badge--${coverageTier(s.aoi_coverage_percent)}`}>
@@ -159,10 +262,8 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
               </div>
               <div className="acquisition-actions">
                 <button
-                  disabled={busy || !selectedBefore || !selectedAfter}
+                  disabled={busy || selectedBefore.length !== targetCount || selectedAfter.length !== targetCount}
                   onClick={() =>
-                    selectedBefore &&
-                    selectedAfter &&
                     run(
                       () => selectAcquisitionScenes(fireId, selectedBefore, selectedAfter),
                       'Could not save the scene selection.',
@@ -175,8 +276,7 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
                   className="acquisition-cancel-btn"
                   disabled={busy}
                   onClick={() => {
-                    setSelectedBefore(null)
-                    setSelectedAfter(null)
+                    resetLocalSelection()
                     run(() => unmarkAcquisition(fireId), 'Could not cancel.')
                   }}
                 >
@@ -188,17 +288,16 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
         </div>
       )}
 
-      {acquisition.before_scene && acquisition.after_scene && (
+      {acquisition.before_scenes.length > 0 && acquisition.after_scenes.length > 0 && (
         <div className="scene-summary">
-          <p>
-            <strong>Before:</strong> {sceneLabel(acquisition.before_scene)}
-            {acquisition.before_scene.aoi_coverage_percent != null &&
-              ` · ${acquisition.before_scene.aoi_coverage_percent}% coverage`}
+          <p className={`mode-badge mode-badge--${acquisition.mode === 'composite' ? 'good' : 'warn'}`}>
+            {modeLabel(acquisition.mode)}
           </p>
           <p>
-            <strong>After:</strong> {sceneLabel(acquisition.after_scene)}
-            {acquisition.after_scene.aoi_coverage_percent != null &&
-              ` · ${acquisition.after_scene.aoi_coverage_percent}% coverage`}
+            <strong>Before:</strong> {acquisition.before_scenes.map(sceneLabel).join(' · ')}
+          </p>
+          <p>
+            <strong>After:</strong> {acquisition.after_scenes.map(sceneLabel).join(' · ')}
           </p>
           {acquisition.status !== 'confirmed' && (
             <button
@@ -219,8 +318,7 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
             className="acquisition-cancel-btn"
             disabled={busy}
             onClick={() => {
-              setSelectedBefore(null)
-              setSelectedAfter(null)
+              resetLocalSelection()
               run(() => unmarkAcquisition(fireId), 'Could not reset.')
             }}
           >

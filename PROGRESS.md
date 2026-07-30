@@ -175,6 +175,17 @@ behind anything marked as a real choice, not just what got built.
       OpenFreeMap street style - matches TAFP's own Street/Imagery toggle
 - [ ] Email notification when a new fire enters the priority-acquisition
       slot (separate from the hard confirm-gate on actually spending money)
+- [ ] Building footprints as their own visible map layer (not just used
+      internally for exposure counts/SAR damage classification) - raised
+      2026-07-30 alongside the OSM-vs-Microsoft building dataset decision
+      (see `SAR_METHODOLOGY.md` §6). More work than a quick add - shelved.
+- [ ] SAR damage-threshold loose recalibration against publicly reported
+      aggregate "structures destroyed" counts (NIFC/state emergency
+      management updates), if/when available for a specific fire - a much
+      weaker signal than the original pipeline's per-building CAL FIRE
+      DINS ground truth (matching a total doesn't confirm the right
+      buildings were flagged), but a real idea raised 2026-07-30. See
+      `SAR_METHODOLOGY.md` §7 - fixed threshold used for now instead.
 - Explicitly parked, not planned: "evacuation routes" as a labeled feature
   - no standardized national data source exists for real evacuation
     routes; the basemap already shows roads, so a dedicated OSM-highways
@@ -328,15 +339,90 @@ loop scene picking instead.
       (mid-selection, or already saved) up to `FireDetail` via an
       `onScenesChange` callback, which feeds `FireMap`. Verified live:
       real ~250km swath polygon coordinates render correctly.
-- [ ] **Compute dispatch + results display** (deferred design discussion,
-      not started): refactor the pipeline's download/process/composite/
-      change modules to take explicit scene IDs instead of config-file
-      dates; dispatch the existing `LAwildfireSAR` Docker image (Ubuntu +
-      ESA SNAP) to ephemeral cloud compute once scenes are human-
-      confirmed; store results (reusing `sync_to_s3.py`); surface on Fire
-      Detail. Honest schedule read: roughly a week if tightly scoped — the
-      science is largely reusable, the real risk is the ephemeral-compute
-      dispatch mechanism itself (new infrastructure).
+- [ ] **Compute dispatch + results display** (2026-07-30 — design fully
+      settled, see `DECISIONS.md` "SAR compute dispatch — full
+      architecture + methodology decisions" and the full reasoning in
+      `SAR_METHODOLOGY.md`; **not started**, this is the very next work).
+      Architecture: AWS Batch on Fargate, existing `LAwildfireSAR`
+      Dockerfile pushed to ECR, `/confirm` endpoint calls `boto3` Batch
+      `submit_job`, new `asyncio` polling loop (same pattern as ingestion/
+      exposure/alerts) checks job status, results synced to S3. Estimated
+      ~$1.50-5 total for 3 demo fires (unmeasured placeholder pending a
+      first real run). Broken into five phases, build in this order:
+  - [x] **Phase A — data model** (2026-07-30, done + tested live): migrated
+        `acquisition_before_scene`/`acquisition_after_scene` (single `Scene`
+        each) to `acquisition_before_scenes`/`acquisition_after_scenes`
+        (lists) via Alembic migration `68638b5b0811` - existing single-scene
+        values preserved as single-element lists, not dropped. `/select`
+        validates: both sides must be the same size, size must be exactly
+        3 (Composite) or exactly 1 (Single-pair) - no "2" tier - and every
+        selected scene on *both* sides must share one relative orbit/track
+        (not just before-matches-after as before). Added a 14-day minimum
+        floor (`AFTER_WINDOW_MIN_DAYS`) to the "after" search window -
+        verified live it correctly produces zero candidates (not a crash)
+        for a fire discovered too recently for any valid post-window date
+        to exist yet. `AcquisitionOut` now also returns a derived `mode`
+        (`'composite'` | `'single_pair'` | `None`) so the frontend doesn't
+        need to reimplement that logic from list length.
+        **Real bug found + fixed during this**: SQLAlchemy's JSONB column
+        type stores a Python `None` as the literal JSON `null` (a real,
+        non-SQL-NULL value) unless the column is declared with
+        `none_as_null=True` - every prior `unmark` call across this
+        feature's whole development had been silently doing this. Invisible
+        until `jsonb_build_array()` in the new migration didn't skip a
+        JSON-null-but-not-SQL-NULL column the way it skips true SQL NULL,
+        producing a `[null]` array instead of `NULL`. Fixed the column
+        definitions and cleaned up the one row that had already been
+        corrupted by it (confirmed only one fire affected, live-checked
+        across the whole table before assuming that).
+  - [x] **Phase B — scene picker rework** (2026-07-30, done + build-tested):
+        `AcquisitionPanel` now shows a per-track candidate-count summary
+        first (computed client-side from data `/candidates` already
+        returns - no backend change needed for the counting itself), each
+        row labeled "Composite-ready" or "Single-pair only" so the best
+        track is obvious before touching individual scenes. Clicking a
+        track locks it and filters both columns to just that track;
+        multi-select up to the track's target count (3 or 1, derived
+        automatically from that track's own eligibility - no manual mode
+        toggle). Reduced-reliability warning banner shown automatically in
+        Single-pair mode. Saved state shows a mode badge ("Composite (3+3)"
+        green / "Single-pair (1+1) — reduced reliability" amber).
+        `FireMap`'s `sceneFootprints` prop now takes arrays per side and
+        draws every selected scene's footprint, not just one.
+  - [ ] **Phase C — pipeline adaptation**: new lightweight entrypoint
+        (replacing `scripts/run_processing.py`'s config-file-driven
+        orchestration in a copy of the `LAwildfireSAR` codebase used for
+        the Docker image) that takes exact scene IDs already chosen by
+        the human (no track search/selection needed at compute time) →
+        downloads via `download.py` → RTC via `process.py` (unchanged) →
+        `composite.py`'s median build *only in Composite mode* (Single-
+        pair mode feeds the lone RTC output straight to change detection)
+        → `change.py` (unchanged core math, AOI = this fire's perimeter
+        instead of the hardcoded LA-events bbox) → `buildings.py` reworked
+        to classify against our cached OSM footprints
+        (`building_cache.buildings`) instead of Microsoft's dataset, fixed
+        2.9 dB / 1.74 dB thresholds (inherited, not independently
+        validated — document this in the output) → **skip `validate.py`
+        entirely** (no ground truth exists for a live fire) → sync results
+        to S3 (`sync_to_s3.py` pattern). Package into the existing
+        Dockerfile, push to ECR.
+  - [ ] **Phase D — AWS infrastructure**: ECR repo; Batch compute
+        environment (Fargate-backed) + job queue + job definition with a
+        hard timeout (~6h) as a cost-safety cap; IAM roles scoped to S3
+        read/write; extend `/confirm` to call `boto3` `submit_job` with
+        the chosen scene IDs + fire ID as container overrides; new
+        background polling loop (`asyncio`, matching the existing
+        ingestion/exposure/alerts pattern — no new AWS services like
+        EventBridge/Lambda) checking `batch.describe_jobs()` and updating
+        the DB on `SUCCEEDED`/`FAILED`.
+  - [ ] **Phase E — results display**: new acquisition status states
+        (processing → complete/failed) with S3 result location stored;
+        new Fire Detail UI section for the output (damage summary/map
+        overlay); UI copy must visibly label which mode ran ("Composite
+        (3+3)" vs. "Single-pair (1+1) — reduced reliability") and frame
+        accuracy honestly per `SAR_METHODOLOGY.md` (not "F1 0.80
+        validated" — that number doesn't transfer to a new fire, new
+        building dataset, or uncalibrated threshold).
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of

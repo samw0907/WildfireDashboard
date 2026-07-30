@@ -28,12 +28,21 @@ class Fire(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    # Human-in-the-loop SAR acquisition workflow (see DECISIONS.md) - mutable
-    # per-fire state, not a history, since only one acquisition request is
-    # ever in flight for a given fire at a time.
+    # Human-in-the-loop SAR acquisition workflow (see DECISIONS.md,
+    # SAR_METHODOLOGY.md) - mutable per-fire state, not a history, since
+    # only one acquisition request is ever in flight for a given fire at a
+    # time. Scene lists, not single scenes: exactly 3 each for Composite
+    # mode (median compositing), or exactly 1 each for Single-pair
+    # fallback mode when a track can't support 3 - see
+    # SAR_METHODOLOGY.md §8 for why there's no "2" tier in between.
     acquisition_status: Mapped[str | None] = mapped_column(String)  # None | 'marked' | 'confirmed'
-    acquisition_before_scene: Mapped[dict | None] = mapped_column(JSONB)
-    acquisition_after_scene: Mapped[dict | None] = mapped_column(JSONB)
+    # none_as_null=True is required here: SQLAlchemy's JSON/JSONB type
+    # otherwise stores a Python None as the literal JSON `null` (a real,
+    # non-SQL-NULL value) rather than SQL NULL - confirmed live this broke
+    # jsonb_build_array() in a later migration, which doesn't skip a
+    # column holding JSON null the way it skips true SQL NULL.
+    acquisition_before_scenes: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
+    acquisition_after_scenes: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
     acquisition_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 

@@ -28,9 +28,21 @@ from ..schemas import AcquisitionCandidatesOut, AcquisitionOut, AcquisitionSelec
 # side without searching an unreasonably wide window.
 BEFORE_WINDOW_DAYS = 21
 AFTER_WINDOW_MAX_DAYS = 45
+# Minimum days after discovery before searching for an "after" scene -
+# imagery taken sooner risks picking up active-suppression confounders
+# (retardant, emergency vehicles, debris disturbance) rather than the
+# structural/vegetation change actually being measured. Matches the
+# original LAwildfireSAR pipeline's own reasoning (see SAR_METHODOLOGY.md).
+AFTER_WINDOW_MIN_DAYS = 14
 # Padding beyond the fire's own perimeter for the search AOI - reuses the
 # existing meter-accurate buffering rather than a crude degree pad.
 SEARCH_BUFFER_METERS = 3000
+
+# Composite mode needs exactly 3 scenes per side for median compositing to
+# provide real outlier-robustness (median of 2 is mathematically identical
+# to a mean - no benefit over a single scene). Single-pair fallback mode
+# uses exactly 1. Deliberately no size in between - see SAR_METHODOLOGY.md §8.
+VALID_SELECTION_SIZES = (1, 3)
 
 router = APIRouter(prefix="/api")
 
@@ -79,11 +91,22 @@ def _scene_out(scene: dict, fire_geom_albers, fire_area_albers: float) -> SceneO
     )
 
 
+def _acquisition_mode(before_scenes: list) -> str | None:
+    if len(before_scenes) == 3:
+        return "composite"
+    if len(before_scenes) == 1:
+        return "single_pair"
+    return None
+
+
 def _to_acquisition_out(fire: Fire) -> AcquisitionOut:
+    before_scenes = fire.acquisition_before_scenes or []
+    after_scenes = fire.acquisition_after_scenes or []
     return AcquisitionOut(
         status=fire.acquisition_status,
-        before_scene=SceneOut(**fire.acquisition_before_scene) if fire.acquisition_before_scene else None,
-        after_scene=SceneOut(**fire.acquisition_after_scene) if fire.acquisition_after_scene else None,
+        before_scenes=[SceneOut(**s) for s in before_scenes],
+        after_scenes=[SceneOut(**s) for s in after_scenes],
+        mode=_acquisition_mode(before_scenes),
         confirmed_at=fire.acquisition_confirmed_at,
     )
 
@@ -107,7 +130,7 @@ def get_acquisition_candidates(fire_id: str, db: Session = Depends(get_db)):
 
     before_start = (discovered - timedelta(days=BEFORE_WINDOW_DAYS)).date().isoformat()
     before_end = discovered.date().isoformat()
-    after_start = before_end
+    after_start = (discovered + timedelta(days=AFTER_WINDOW_MIN_DAYS)).date().isoformat()
     after_end_dt = min(datetime.now(timezone.utc), discovered + timedelta(days=AFTER_WINDOW_MAX_DAYS))
     after_end = (after_end_dt + timedelta(days=1)).date().isoformat()
 
@@ -145,17 +168,38 @@ def select_scenes(fire_id: str, body: AcquisitionSelectIn, db: Session = Depends
     if fire.acquisition_status is None:
         raise HTTPException(status_code=400, detail="Fire is not marked for acquisition yet")
 
-    fire.acquisition_before_scene = body.before.model_dump(mode="json")
-    fire.acquisition_after_scene = body.after.model_dump(mode="json")
+    if len(body.before) not in VALID_SELECTION_SIZES or len(body.after) not in VALID_SELECTION_SIZES:
+        raise HTTPException(
+            status_code=400,
+            detail="Select exactly 3 scenes per side for Composite mode, or exactly 1 per side for Single-pair mode",
+        )
+    if len(body.before) != len(body.after):
+        raise HTTPException(
+            status_code=400, detail="Before and after selections must be the same size (both 3, or both 1)"
+        )
+
+    # Every scene composited together - on both sides - must share the same
+    # relative orbit/track, since compositing assumes consistent viewing
+    # geometry throughout (see SAR_METHODOLOGY.md §1.3/§8). Not just
+    # before-matches-after: all selected scenes on both sides together.
+    all_tracks = {s.relative_orbit for s in body.before} | {s.relative_orbit for s in body.after}
+    if len(all_tracks) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"All selected scenes must share the same track (relative orbit) - got {sorted(t for t in all_tracks if t is not None)}",
+        )
+
+    fire.acquisition_before_scenes = [s.model_dump(mode="json") for s in body.before]
+    fire.acquisition_after_scenes = [s.model_dump(mode="json") for s in body.after]
     db.commit()
-    return {"status": "scenes_selected"}
+    return {"status": "scenes_selected", "mode": _acquisition_mode(body.before)}
 
 
 @router.post("/fires/{fire_id}/acquisition/confirm", dependencies=[Depends(require_admin_key)])
 def confirm_acquisition(fire_id: str, db: Session = Depends(get_db)):
     fire = _get_fire_or_404(db, fire_id)
-    if not fire.acquisition_before_scene or not fire.acquisition_after_scene:
-        raise HTTPException(status_code=400, detail="Select both a before and after scene before confirming")
+    if not fire.acquisition_before_scenes or not fire.acquisition_after_scenes:
+        raise HTTPException(status_code=400, detail="Select both before and after scenes before confirming")
 
     fire.acquisition_status = "confirmed"
     fire.acquisition_confirmed_at = datetime.now(timezone.utc)
@@ -167,8 +211,8 @@ def confirm_acquisition(fire_id: str, db: Session = Depends(get_db)):
 def unmark_acquisition(fire_id: str, db: Session = Depends(get_db)):
     fire = _get_fire_or_404(db, fire_id)
     fire.acquisition_status = None
-    fire.acquisition_before_scene = None
-    fire.acquisition_after_scene = None
+    fire.acquisition_before_scenes = None
+    fire.acquisition_after_scenes = None
     fire.acquisition_confirmed_at = None
     db.commit()
     return {"status": "unmarked"}
