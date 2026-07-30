@@ -153,6 +153,10 @@ export function FireDetail() {
         </div>
         <div className="exposure-panel">
           <h2>Exposure</h2>
+          <p className="exposure-note">
+            Population figures are estimates, not precise counts - less accurate for small fires
+            in sparse areas. See <Link to="/reference#population-methodology">methodology</Link>.
+          </p>
           {fire.exposure.length === 0 && (
             <p className="page-subtitle">Exposure data pending — this fire hasn't been processed yet.</p>
           )}

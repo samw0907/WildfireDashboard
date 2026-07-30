@@ -14,7 +14,7 @@ type SortKey =
   | 'priority_score'
 type SortDirection = 'asc' | 'desc'
 
-const COLUMNS: { key: SortKey; label: string }[] = [
+const COLUMNS: { key: SortKey; label: string; title?: string }[] = [
   { key: 'priority_score', label: 'Priority' },
   { key: 'name', label: 'Name' },
   { key: 'state', label: 'State' },
@@ -24,7 +24,12 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'fire_cause', label: 'Cause' },
   { key: 'complexity_level', label: 'Complexity' },
   { key: 'buildings', label: 'Buildings (2.4km)' },
-  { key: 'population', label: 'Population (2.4km)' },
+  {
+    key: 'population',
+    label: 'Population (2.4km)',
+    title:
+      'Estimated via Census block-group areal apportionment, not a precise measurement - less accurate for small fires in sparse rural areas. See Reference for methodology.',
+  },
 ]
 
 function getSortValue(fire: Fire, key: SortKey): string | number {
@@ -86,8 +91,8 @@ export function FireTable({ fires, onSelectFire }: FireTableProps) {
       <table className="fire-table">
         <thead>
           <tr>
-            {COLUMNS.map(({ key, label }) => (
-              <th key={key} onClick={() => handleSort(key)}>
+            {COLUMNS.map(({ key, label, title }) => (
+              <th key={key} onClick={() => handleSort(key)} title={title}>
                 {label}
                 {sortKey === key && <span className="sort-arrow">{sortDirection === 'asc' ? ' ▲' : ' ▼'}</span>}
               </th>

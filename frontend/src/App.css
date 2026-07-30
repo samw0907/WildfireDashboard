@@ -959,6 +959,12 @@
   color: var(--text-muted);
 }
 
+.exposure-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
+
 @media (max-width: 768px) {
   .fire-detail-split {
     flex-direction: column;
