@@ -31,7 +31,11 @@ def _weighted_index(exposure: list[ExposureStat], attr: str) -> float:
         weight = BAND_WEIGHTS.get(e.buffer_meters)
         value = getattr(e, attr)
         if weight and value is not None:
-            total += weight * value
+            # population_est is a Postgres Numeric column, which SQLAlchemy
+            # returns as decimal.Decimal - float(total) += Decimal raises
+            # TypeError. Was dead code until real Census data landed and
+            # broke every /api/fires response in production.
+            total += weight * float(value)
     return total
 
 
