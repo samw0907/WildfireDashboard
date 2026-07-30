@@ -418,23 +418,64 @@ loop scene picking instead.
         `SAR_METHODOLOGY.md`. Frame-mosaicking (stitching adjacent frames
         from the same track/date into one full-coverage input) logged as a
         genuine future technique, not in scope now.
-  - [ ] **Phase C — pipeline adaptation**: new lightweight entrypoint
-        (replacing `scripts/run_processing.py`'s config-file-driven
-        orchestration in a copy of the `LAwildfireSAR` codebase used for
-        the Docker image) that takes exact scene IDs already chosen by
-        the human (no track search/selection needed at compute time) →
-        downloads via `download.py` → RTC via `process.py` (unchanged) →
+  - [ ] **Flagged for a follow-up review pass later** (2026-07-30): user is
+        happy with Phases A/B for now but wants the whole mark-for-
+        acquisition + picker flow re-checked once Phases C-E exist and
+        there's an end-to-end real result to test against - not signed off
+        as final yet, revisit before considering this feature complete.
+  - [x] **Phase C — pipeline adaptation** (2026-07-30, written + partially
+        verified — **not yet run for real, see caveat below**): new
+        `sar-compute/` directory at the repo root (self-contained, own
+        Dockerfile/requirements.txt, adapted copies of the pipeline
+        modules — does not modify or depend on the separate
+        `LAwildfireSAR` repo, which stays untouched as its own portfolio
+        piece). `entrypoint.py` takes only `FIRE_ID` as input and fetches
+        everything else (perimeter, selected scenes, mode) live from the
+        main backend's own public API (`GET /api/fires/{id}` and
+        `GET /api/fires/{id}/acquisition`) — no track search/selection
+        happens here, a human already picked exact scenes via the picker.
+        Flow: `download.py` (simplified — no `search_scene`/
+        `select_orbit_direction`, just downloads the exact CDSE product
+        IDs already chosen) → `process.py` (RTC via pyroSAR/SNAP,
+        unchanged core `geocode()` params from the original) →
         `composite.py`'s median build *only in Composite mode* (Single-
-        pair mode feeds the lone RTC output straight to change detection)
-        → `change.py` (unchanged core math, AOI = this fire's perimeter
-        instead of the hardcoded LA-events bbox) → `buildings.py` reworked
-        to classify against our cached OSM footprints
-        (`building_cache.buildings`) instead of Microsoft's dataset, fixed
-        2.9 dB / 1.74 dB thresholds (inherited, not independently
-        validated — document this in the output) → **skip `validate.py`
-        entirely** (no ground truth exists for a live fire) → sync results
-        to S3 (`sync_to_s3.py` pattern). Package into the existing
-        Dockerfile, push to ECR.
+        pair mode skips straight to change detection using the lone RTC
+        output per side) → `change.py` (unchanged core math — log-ratio,
+        VV+VH combined magnitude, threshold, minimum-mapping-unit filter
+        — but now clips to the fire's real perimeter *polygon* via
+        `rasterio.mask`, not a rectangular bbox like the original's
+        two-fire `combined_bbox`) → `buildings.py` (classifies against
+        this fire's already-cached OSM footprints, fetched from the same
+        `GET /api/fires/{id}` response the frontend uses — no new
+        building-data pipeline; fixed 2.9 dB / 1.74 dB thresholds,
+        explicitly marked `"threshold_validated": false` in the output
+        JSON itself, not just in docs) → **`validate.py` has no
+        equivalent at all** (no ground truth exists for a live fire) →
+        writes a compact `result_summary.json` (mode, burn area, damage
+        counts, honesty notes) plus the full GeoJSON/raster outputs →
+        syncs all of it to S3 under `acquisitions/{fire_id}/` (adapted
+        from `sync_to_s3.py`, using the Fargate task's IAM role via
+        boto3's default credential chain instead of explicit AWS keys).
+        UTM zone for RTC processing is now computed per-fire from its
+        centroid longitude (the original hardcoded `EPSG:32611` for LA
+        specifically) — **verified this independently reproduces
+        `EPSG:32611`** when fed Eaton fire's real coordinates, and
+        correctly produces zone 13 for a real Colorado fire's actual
+        centroid (queried live from `building_cache`/`fires` tables).
+        Also verified the real cached OSM buildings data
+        (`building_cache.buildings`) is a valid GeoJSON FeatureCollection
+        of real Polygons - the exact shape `buildings.py`'s
+        `fetch_osm_buildings()` expects.
+        **Honest caveat, not glossed over**: none of `download.py`/
+        `process.py`/`composite.py`/`change.py`/`buildings.py` have been
+        run for real - that needs the actual Docker image built (ESA SNAP
+        install, ~hours) and a real multi-hour job, which is Phase D/the
+        "first real test run" territory, not something verifiable in this
+        environment (no SNAP, no rasterio/geopandas/pyroSAR installed
+        outside the image itself). Verified everything that *could* be
+        verified without that: Python syntax on every new file, the
+        UTM-zone math against two independent real fire locations, and the
+        real OSM building data's shape against what the code expects.
   - [ ] **Phase D — AWS infrastructure**: ECR repo; Batch compute
         environment (Fargate-backed) + job queue + job definition with a
         hard timeout (~6h) as a cost-safety cap; IAM roles scoped to S3

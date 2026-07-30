@@ -671,6 +671,48 @@ added** before the fallback/picker rework ships, not after.
 - Any masking/reweighting of the flat single-threshold-for-all-buildings
   approach by building size (identified as a real limitation, not fixed).
 
+## SAR compute pipeline implementation (Phase C, 2026-07-30)
+
+New `sar-compute/` directory at the repo root - self-contained (own
+Dockerfile/requirements.txt), does not modify or depend on the separate
+`LAwildfireSAR` repo, which stays untouched as its own portfolio piece.
+Full build detail is in `PROGRESS.md`'s Phase C entry; the genuine
+engineering decisions worth logging here:
+
+- **The compute job fetches its own inputs by `FIRE_ID` from the main
+  backend's public API**, rather than the trigger passing perimeter/scene
+  data as job parameters. Simpler Batch job definition (one env var, not a
+  growing pile of parameters), and the job always reads current data
+  rather than a snapshot from whenever it was submitted.
+- **IAM task role over explicit AWS credentials** for S3 access - the
+  original `LAwildfireSAR` script needed `AWS_ACCESS_KEY_ID`/`SECRET` env
+  vars since it ran standalone with no AWS-native identity; this job runs
+  inside Fargate, which can just be granted an S3-scoped role directly.
+  More secure, no credential management at all.
+- **Per-fire UTM zone**, not a hardcoded one. The original pipeline fixed
+  `EPSG:32611` because both its fires were in the same LA-area location;
+  an arbitrary new fire needs its own zone computed from its centroid
+  longitude. Verified this reproduces `EPSG:32611` exactly when fed
+  Eaton's real coordinates, and correctly gives zone 13 for a real
+  Colorado fire.
+- **Clip to the fire's actual perimeter polygon, not a bounding box**, in
+  `change.py`'s burn-mask step (`rasterio.mask` on the reprojected
+  perimeter geometry). The original used a bbox because its
+  `combined_bbox` covered two whole fire study areas as one unit; a single
+  arbitrary fire's real footprint is available and more precise to use.
+- **`validate.py` has no equivalent at all** - not simplified, dropped
+  entirely, since there's no CAL FIRE DINS-style ground truth for a live
+  fire (§3/§7 in `SAR_METHODOLOGY.md`). The output JSON itself carries
+  `threshold_validated: false` and an explanatory note, not just this doc.
+- **Honest status**: none of the actual RTC/compositing/change-detection
+  code has been run for real yet - that needs the built Docker image
+  (ESA SNAP install) and a real multi-hour job, not something verifiable
+  without SNAP/rasterio/geopandas/pyroSAR installed, which only exist
+  inside the image. Verified what could be verified without that: syntax
+  on every file, the UTM-zone math against two independent real fire
+  locations, and the real cached OSM building data's shape against what
+  the code expects.
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands
