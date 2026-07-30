@@ -25,7 +25,7 @@ export function ImpactStatCard({ label, icon: Icon, accent, impacted, underThrea
             <span className="impact-number-label">impacted</span>
           </div>
           <div className="impact-number">
-            <span className="stat-value impact-value">{underThreat}</span>
+            <span className="stat-value stat-value--yellow impact-value">{underThreat}</span>
             <span className="impact-number-label">under threat (2.4km)</span>
           </div>
         </div>

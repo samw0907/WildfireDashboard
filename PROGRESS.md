@@ -181,6 +181,28 @@ behind anything marked as a real choice, not just what got built.
     layer wasn't judged worth adding on its own. The methodologically
     real version (network/isochrone travel-time analysis) is a genuine
     future idea, not a quick add.
+- [ ] **Fire Detail history/timeline** (2026-07-30 idea, shelved - real
+      schema work, not a quick add): user asked about scrubbing day-by-day
+      through a fire's perimeter/stat changes over its lifetime. Checked
+      `ingestion.py`'s `upsert_fires()`: it's a true `ON CONFLICT DO
+      UPDATE` - perimeter, acres, containment %, everything gets
+      overwritten in place every 15-min cycle, with zero history kept on
+      the `fires` table itself. (`ExposureStat` is the one exception -
+      already append-only, so a buildings/population-over-time trend is
+      comparatively cheap; it's specifically perimeter shape + core fields
+      that have no history.) Checked whether NIFC publishes something
+      queryable instead of building our own versioning - they have
+      historical fire-perimeter datasets (`WFIGS Wildland Fire Perimeters
+      Full History`, `InterAgencyFirePerimeterHistory`), but these read as
+      archives of past, *closed-out* fire seasons (final perimeter per
+      fire, year over year), not a live log of one currently-active fire's
+      perimeter changing shape day by day - unconfirmed without live-
+      testing the actual endpoint, flagged as unresolved rather than
+      assumed. Building this for real needs: a new snapshot table (written
+      whenever ingestion detects a change for a tracked fire), new
+      ingestion logic, a new API endpoint serving the time series, and new
+      frontend UI (a day-by-day scrubber on Fire Detail) - a genuine
+      multi-piece feature, not a quick add.
 
 ## Fire Detail wind + forecast (2026-07-29)
 - [x] `GET /api/fires/{id}/weather` - centroid of the fire's own perimeter

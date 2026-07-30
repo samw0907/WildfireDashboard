@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { exposureAtBand, type Fire } from '../api'
 import { InfoHint } from './InfoHint'
+import { RfwBadge } from './RfwBadge'
 import { PRIORITY_SCORE_HELP, POPULATION_HELP } from '../helpText'
 
 type SortKey =
@@ -112,14 +113,7 @@ export function FireTable({ fires, onSelectFire }: FireTableProps) {
                   </td>
                   <td>
                     {f.name}
-                    {f.in_active_fire_weather_warning && (
-                      <span
-                        className="warning-badge"
-                        title="Fire perimeter is inside an active NWS Red Flag Warning or Fire Weather Watch zone"
-                      >
-                        ⚠ RFW
-                      </span>
-                    )}
+                    {f.in_active_fire_weather_warning && <RfwBadge compact />}
                   </td>
                   <td>{f.state ?? '—'}</td>
                   <td>{f.discovered_date ? new Date(f.discovered_date).toLocaleDateString() : '—'}</td>

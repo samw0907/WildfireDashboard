@@ -576,16 +576,66 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  margin-left: 4px;
+  width: 17px;
+  height: 17px;
+  margin-left: 5px;
   border-radius: 50%;
-  background: var(--bg-hover);
-  color: var(--text-muted);
-  font-size: 10px;
+  background: var(--accent-green-bg);
+  border: 1px solid var(--accent-green);
+  color: var(--accent-green);
+  font-size: 11px;
   font-weight: 700;
-  cursor: help;
+  cursor: pointer;
   vertical-align: middle;
+  transition: background 0.15s ease, color 0.15s ease;
+  position: relative;
+}
+
+.info-hint:hover {
+  background: var(--accent-green);
+  color: var(--bg);
+}
+
+/* Rendered via a portal at document.body, positioned with `fixed`
+   coordinates in TooltipBubble.tsx - the selector here is just the visual
+   styling, not the positioning math. */
+.tooltip-bubble {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: 260px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-green);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  pointer-events: none;
+}
+
+.tooltip-bubble::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: var(--border);
+}
+
+.tooltip-bubble::after {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: var(--bg-elevated);
 }
 
 .fire-table {
