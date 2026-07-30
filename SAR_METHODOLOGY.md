@@ -438,6 +438,41 @@ anything earlier than 14 days post-ignition (active-suppression confound
 - retardant, vehicles, debris disturbance, §1 above). **Adding the same
 14-day minimum floor** before the picker rework ships.
 
+### 8.1 Refinement: coverage completeness ranks above scene count (2026-07-30)
+
+The mechanism above (built same day) initially ranked tracks by *count*
+only - "3+ scenes on both sides" was labeled "Composite-ready" regardless
+of how much of the fire each individual scene actually covered. Caught
+live by the user looking at real output: a track can have 4+ scenes on
+both sides and still only cover 27-73% of the fire's perimeter per scene
+- a real, structural risk for large fires that straddle a fixed IW frame
+boundary on *every* pass of a track, not an incidental one-off. Confirmed
+this immediately against real data (Aspen Acres, 101,961 acres - one of
+the largest tracked): one track had exactly this problem (4 before/4
+after, only 27-73% coverage each), while a *different* track had true
+100% coverage on every scene but only enough for Single-pair, not
+Composite.
+
+**Resolved: coverage completeness is ranked above compositing
+noise-robustness** - a scene that doesn't cover the fire can't tell you
+anything about it regardless of how many dates get averaged. Four tiers,
+best to worst: (1) Composite using only ≥95%-coverage scenes, (2)
+Single-pair using ≥95%-coverage scenes, (3) Composite using
+partial-coverage scenes, (4) Single-pair using partial-coverage scenes.
+The best-ranked track is marked "Recommended" but every track stays
+browsable - same non-blocking philosophy as the Composite/Single-pair
+fallback itself. 0%-coverage scenes (bbox-touching but not actually
+intersecting the fire) are now excluded from candidate counts entirely,
+not just deprioritized. Full detail and the live verification numbers are
+in `PROGRESS.md`'s Phase B entry.
+
+**Noted for later, not in scope now**: frame-mosaicking (stitching two
+adjacent frames from the same track/date into one full-coverage input
+before RTC processing) would be a genuine fix for the structural
+large-fire case rather than just ranking around it - meaningfully more
+complex (needs raster mosaicking logic in the compute pipeline, not just
+picker UI), logged as a real future technique.
+
 ## 9. Final implementation plan (confirmed 2026-07-30 — ready to build)
 
 Everything above is now decided, not open. Full phase breakdown lives in

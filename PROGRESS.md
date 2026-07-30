@@ -186,6 +186,13 @@ behind anything marked as a real choice, not just what got built.
       DINS ground truth (matching a total doesn't confirm the right
       buildings were flagged), but a real idea raised 2026-07-30. See
       `SAR_METHODOLOGY.md` §7 - fixed threshold used for now instead.
+- [ ] SAR frame-mosaicking: stitch two adjacent Sentinel-1 frames from the
+      same track/date into one full-coverage input before RTC processing,
+      instead of just ranking around partial-coverage tracks. A genuine
+      fix for the structural large-fire-straddles-a-frame-boundary case
+      (see `SAR_METHODOLOGY.md` §8.1), not just a workaround - meaningfully
+      more complex (raster mosaicking logic in the compute pipeline, not
+      picker UI), raised 2026-07-30, not in scope now.
 - Explicitly parked, not planned: "evacuation routes" as a labeled feature
   - no standardized national data source exists for real evacuation
     routes; the basemap already shows roads, so a dedicated OSM-highways
@@ -375,20 +382,42 @@ loop scene picking instead.
         definitions and cleaned up the one row that had already been
         corrupted by it (confirmed only one fire affected, live-checked
         across the whole table before assuming that).
-  - [x] **Phase B — scene picker rework** (2026-07-30, done + build-tested):
-        `AcquisitionPanel` now shows a per-track candidate-count summary
-        first (computed client-side from data `/candidates` already
-        returns - no backend change needed for the counting itself), each
-        row labeled "Composite-ready" or "Single-pair only" so the best
-        track is obvious before touching individual scenes. Clicking a
-        track locks it and filters both columns to just that track;
-        multi-select up to the track's target count (3 or 1, derived
-        automatically from that track's own eligibility - no manual mode
-        toggle). Reduced-reliability warning banner shown automatically in
-        Single-pair mode. Saved state shows a mode badge ("Composite (3+3)"
-        green / "Single-pair (1+1) — reduced reliability" amber).
-        `FireMap`'s `sceneFootprints` prop now takes arrays per side and
-        draws every selected scene's footprint, not just one.
+  - [x] **Phase B — scene picker rework** (2026-07-30, done + build-tested,
+        then refined same day after user caught a real gap): `AcquisitionPanel`
+        shows a per-track candidate summary first (computed client-side
+        from data `/candidates` already returns), best track obvious
+        before touching individual scenes. Clicking a track locks it and
+        filters both columns to just that track; multi-select up to the
+        track's target count (3 or 1). Reduced-reliability warning shown
+        automatically in Single-pair mode. Saved state shows a mode badge.
+        `FireMap`'s `sceneFootprints` prop takes arrays per side and draws
+        every selected scene's footprint, not just one.
+        **Refinement (2026-07-30, same day)**: the first version ranked
+        tracks by *count* only (3+ scenes on both sides = "Composite-
+        ready") - user caught live that this can recommend a track whose
+        scenes only partially cover the fire (27-73% AOI coverage in the
+        real example that surfaced this), which is worse than a full-
+        coverage single pair. Replaced with a 4-tier ranking: (1) Composite
+        using only ≥95%-coverage scenes, (2) Single-pair using ≥95%-
+        coverage scenes, (3) Composite using partial-coverage scenes, (4)
+        Single-pair using partial-coverage scenes - coverage completeness
+        ranked above compositing noise-robustness, since a scene that
+        doesn't cover the fire can't tell you anything about it regardless
+        of how many dates get averaged. Top-ranked track marked
+        "Recommended," all tracks still browsable. 0%-coverage scenes now
+        excluded from candidate counts entirely (bbox-touching noise, not
+        real candidates). Picker pre-selects the best-covering scenes on
+        the chosen track as a sensible default, user can still override.
+        **Verified live against a real large fire (Aspen Acres, 101,961
+        acres)**: confirms this isn't a hypothetical edge case - one track
+        had 100% coverage on all scenes but only enough for Single-pair
+        (correctly ranked Tier 2/Recommended), another had enough scenes
+        for Composite by count but only 27-73% coverage each (correctly
+        ranked Tier 3, below the single-pair option) - exactly the
+        large-fire-straddling-a-frame-boundary scenario anticipated in
+        `SAR_METHODOLOGY.md`. Frame-mosaicking (stitching adjacent frames
+        from the same track/date into one full-coverage input) logged as a
+        genuine future technique, not in scope now.
   - [ ] **Phase C — pipeline adaptation**: new lightweight entrypoint
         (replacing `scripts/run_processing.py`'s config-file-driven
         orchestration in a copy of the `LAwildfireSAR` codebase used for

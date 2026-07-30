@@ -17,6 +17,10 @@ import {
 // (1+1) is the only fallback. See SAR_METHODOLOGY.md §8.
 const COMPOSITE_COUNT = 3
 const SINGLE_PAIR_COUNT = 1
+// Same "good" bar used for the per-scene coverage badge - a scene below
+// this still touches the fire but with real gaps, above it is
+// effectively full coverage.
+const FULL_COVERAGE_THRESHOLD = 95
 
 function sceneLabel(s: Scene): string {
   const date = new Date(s.date).toLocaleDateString()
@@ -28,46 +32,109 @@ function sceneLabel(s: Scene): string {
 // the fire's bounding box while a gap runs through the perimeter itself.
 function coverageTier(percent: number | null): 'good' | 'warn' | 'bad' | 'unknown' {
   if (percent == null) return 'unknown'
-  if (percent >= 95) return 'good'
+  if (percent >= FULL_COVERAGE_THRESHOLD) return 'good'
   if (percent > 0) return 'warn'
   return 'bad'
 }
 
+// A scene with 0% AOI coverage touches the search bbox but not the fire
+// itself - not a real candidate for anything, not just a low-quality one.
+function isViable(s: Scene): boolean {
+  return s.aoi_coverage_percent == null || s.aoi_coverage_percent > 0
+}
+
+function isFullCoverage(s: Scene): boolean {
+  return s.aoi_coverage_percent != null && s.aoi_coverage_percent >= FULL_COVERAGE_THRESHOLD
+}
+
+// Ranked best to worst - coverage completeness matters more than compositing
+// noise-robustness, since a scene that doesn't cover the fire can't tell you
+// anything about it regardless of how many dates get averaged:
+//   1. Composite using only full-coverage scenes (best)
+//   2. Single-pair using full-coverage scenes (full coverage beats
+//      compositing partial data)
+//   3. Composite using partial-coverage scenes (some averaging benefit,
+//      real gaps)
+//   4. Single-pair using partial-coverage scenes (worst on both axes)
+type Tier = 1 | 2 | 3 | 4
+
 interface TrackSummary {
   track: number
   direction: string | null
-  beforeCount: number
-  afterCount: number
-  eligibleForComposite: boolean
+  viableBeforeCount: number
+  viableAfterCount: number
+  tier: Tier
+  recommended: boolean
+}
+
+function tierMode(tier: Tier): 'composite' | 'single_pair' {
+  return tier === 1 || tier === 3 ? 'composite' : 'single_pair'
 }
 
 function computeTrackSummaries(candidates: AcquisitionCandidates): TrackSummary[] {
-  const byTrack = new Map<number, TrackSummary>()
-  const bump = (s: Scene, side: 'beforeCount' | 'afterCount') => {
-    if (s.relative_orbit == null) return
+  const byTrack = new Map<
+    number,
+    { direction: string | null; before: Scene[]; after: Scene[] }
+  >()
+  const add = (s: Scene, side: 'before' | 'after') => {
+    if (s.relative_orbit == null || !isViable(s)) return
     const existing = byTrack.get(s.relative_orbit)
     if (existing) {
-      existing[side]++
+      existing[side].push(s)
     } else {
       byTrack.set(s.relative_orbit, {
-        track: s.relative_orbit,
         direction: s.orbit_direction,
-        beforeCount: 0,
-        afterCount: 0,
-        eligibleForComposite: false,
-        [side]: 1,
-      } as TrackSummary)
+        before: side === 'before' ? [s] : [],
+        after: side === 'after' ? [s] : [],
+      })
     }
   }
-  candidates.before.forEach((s) => bump(s, 'beforeCount'))
-  candidates.after.forEach((s) => bump(s, 'afterCount'))
+  candidates.before.forEach((s) => add(s, 'before'))
+  candidates.after.forEach((s) => add(s, 'after'))
 
-  return Array.from(byTrack.values())
-    .map((t) => ({ ...t, eligibleForComposite: t.beforeCount >= COMPOSITE_COUNT && t.afterCount >= COMPOSITE_COUNT }))
-    .sort((a, b) => {
-      if (a.eligibleForComposite !== b.eligibleForComposite) return a.eligibleForComposite ? -1 : 1
-      return b.beforeCount + b.afterCount - (a.beforeCount + a.afterCount)
+  const summaries: TrackSummary[] = []
+  for (const [track, { direction, before, after }] of byTrack) {
+    const fullBefore = before.filter(isFullCoverage).length
+    const fullAfter = after.filter(isFullCoverage).length
+    let tier: Tier
+    if (fullBefore >= COMPOSITE_COUNT && fullAfter >= COMPOSITE_COUNT) tier = 1
+    else if (fullBefore >= SINGLE_PAIR_COUNT && fullAfter >= SINGLE_PAIR_COUNT) tier = 2
+    else if (before.length >= COMPOSITE_COUNT && after.length >= COMPOSITE_COUNT) tier = 3
+    else tier = 4
+
+    summaries.push({
+      track,
+      direction,
+      viableBeforeCount: before.length,
+      viableAfterCount: after.length,
+      tier,
+      recommended: false,
     })
+  }
+
+  summaries.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier
+    return b.viableBeforeCount + b.viableAfterCount - (a.viableBeforeCount + a.viableAfterCount)
+  })
+  if (summaries.length > 0) summaries[0].recommended = true
+  return summaries
+}
+
+function tierBadgeLabel(tier: Tier): string {
+  switch (tier) {
+    case 1:
+      return 'Composite · full coverage'
+    case 2:
+      return 'Single-pair · full coverage'
+    case 3:
+      return 'Composite · partial coverage'
+    case 4:
+      return 'Single-pair · partial coverage'
+  }
+}
+
+function tierBadgeClass(tier: Tier): 'good' | 'warn' {
+  return tier === 1 || tier === 2 ? 'good' : 'warn'
 }
 
 function modeLabel(mode: Acquisition['mode']): string {
@@ -127,18 +194,34 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
   }, [acquisition?.status, acquisition?.before_scenes, fireId])
 
   const trackSummaries = useMemo(() => (candidates ? computeTrackSummaries(candidates) : []), [candidates])
-
   const activeTrackSummary = trackSummaries.find((t) => t.track === selectedTrack) ?? null
-  const targetCount = activeTrackSummary?.eligibleForComposite ? COMPOSITE_COUNT : SINGLE_PAIR_COUNT
+  const targetCount = activeTrackSummary && tierMode(activeTrackSummary.tier) === 'composite' ? COMPOSITE_COUNT : SINGLE_PAIR_COUNT
 
   const trackBefore = useMemo(
-    () => (candidates && selectedTrack != null ? candidates.before.filter((s) => s.relative_orbit === selectedTrack) : []),
+    () =>
+      candidates && selectedTrack != null
+        ? candidates.before.filter((s) => s.relative_orbit === selectedTrack && isViable(s))
+        : [],
     [candidates, selectedTrack],
   )
   const trackAfter = useMemo(
-    () => (candidates && selectedTrack != null ? candidates.after.filter((s) => s.relative_orbit === selectedTrack) : []),
+    () =>
+      candidates && selectedTrack != null
+        ? candidates.after.filter((s) => s.relative_orbit === selectedTrack && isViable(s))
+        : [],
     [candidates, selectedTrack],
   )
+
+  // Default to the best-covering scenes on the newly-selected track, so the
+  // sensible choice is pre-filled - the user can still toggle to anything
+  // else viable on that track.
+  useEffect(() => {
+    if (selectedTrack == null) return
+    const byCoverageDesc = (a: Scene, b: Scene) => (b.aoi_coverage_percent ?? -1) - (a.aoi_coverage_percent ?? -1)
+    setSelectedBefore([...trackBefore].sort(byCoverageDesc).slice(0, targetCount))
+    setSelectedAfter([...trackAfter].sort(byCoverageDesc).slice(0, targetCount))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTrack])
 
   async function run(action: () => Promise<unknown>, failureMessage: string) {
     setBusy(true)
@@ -185,9 +268,11 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
           {candidates && selectedTrack === null && (
             <>
               <p className="page-subtitle">
-                Pick a track. Every scene composited together must share the same viewing geometry - tracks with 3+
-                scenes on both sides support the more reliable Composite mode; others fall back to a single
-                before/after pair.
+                Pick a track. Every scene composited together must share the same viewing geometry. Ranked best
+                first: full-AOI-coverage tracks with 3+ scenes on both sides (Composite, most reliable), then
+                full-coverage tracks with fewer scenes (Single-pair), then tracks where even the best scenes only
+                partly cover the fire - large fires can genuinely straddle a fixed satellite frame boundary on every
+                pass of a track, not just unluckily on one date.
               </p>
               {trackSummaries.length === 0 && <p className="page-subtitle">No candidate scenes found in range.</p>}
               <div className="track-list">
@@ -195,12 +280,13 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
                   <button key={t.track} className="track-option" onClick={() => setSelectedTrack(t.track)}>
                     <span>
                       Track {t.track} ({t.direction ?? 'unknown'})
+                      {t.recommended && <span className="track-recommended"> · Recommended</span>}
                     </span>
                     <span>
-                      {t.beforeCount} before, {t.afterCount} after
+                      {t.viableBeforeCount} before, {t.viableAfterCount} after
                     </span>
-                    <span className={`track-badge track-badge--${t.eligibleForComposite ? 'good' : 'warn'}`}>
-                      {t.eligibleForComposite ? 'Composite-ready' : 'Single-pair only'}
+                    <span className={`track-badge track-badge--${tierBadgeClass(t.tier)}`}>
+                      {tierBadgeLabel(t.tier)}
                     </span>
                   </button>
                 ))}
@@ -222,6 +308,12 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
                 <p className="acquisition-warning">
                   Only single before/after scenes available on this track - results won't benefit from multi-date
                   noise averaging and may be less reliable.
+                </p>
+              )}
+              {activeTrackSummary && (activeTrackSummary.tier === 3 || activeTrackSummary.tier === 4) && (
+                <p className="acquisition-warning">
+                  No scene on this track fully covers the fire's perimeter - the best available still leave real
+                  gaps. Pre-selected the best-covering options; you can swap them for others below.
                 </p>
               )}
               <div className="scene-picker-columns">
@@ -294,10 +386,16 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
             {modeLabel(acquisition.mode)}
           </p>
           <p>
-            <strong>Before:</strong> {acquisition.before_scenes.map(sceneLabel).join(' · ')}
+            <strong>Before:</strong>{' '}
+            {acquisition.before_scenes
+              .map((s) => `${sceneLabel(s)} (${s.aoi_coverage_percent ?? '?'}% coverage)`)
+              .join(' · ')}
           </p>
           <p>
-            <strong>After:</strong> {acquisition.after_scenes.map(sceneLabel).join(' · ')}
+            <strong>After:</strong>{' '}
+            {acquisition.after_scenes
+              .map((s) => `${sceneLabel(s)} (${s.aoi_coverage_percent ?? '?'}% coverage)`)
+              .join(' · ')}
           </p>
           {acquisition.status !== 'confirmed' && (
             <button

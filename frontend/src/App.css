@@ -1046,6 +1046,11 @@
   color: var(--accent-yellow);
 }
 
+.track-recommended {
+  color: var(--accent-green);
+  font-weight: 600;
+}
+
 .track-active-bar {
   display: flex;
   align-items: center;
