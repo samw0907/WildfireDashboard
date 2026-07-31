@@ -15,9 +15,13 @@ interface FireMapProps {
   // level and just adds rendering cost.
   buffers?: Record<string, GeoJSON.Geometry>
   // Whether to fetch and offer a toggle for the NWS Red Flag Warning /
-  // Fire Weather Watch layer - opt-in so Fire Detail's tiny zoomed-in map
-  // doesn't fetch a nationwide layer it has no use for.
+  // Fire Weather Watch layer.
   enableAlerts?: boolean
+  // Initial toggle state when enableAlerts is set - defaults to visible
+  // (the nationwide Dashboard/Map views want it on by default), but Fire
+  // Detail's single-fire view wants it available as an opt-in toggle,
+  // default off, since it's not the primary thing being looked at there.
+  alertsDefaultVisible?: boolean
   // Real Sentinel-1 scene footprints (before/after) - up to 3 each in
   // Composite mode, 1 each in Single-pair mode - for visual context while
   // picking acquisition scenes. Outline only, not filled, since a full IW
@@ -107,6 +111,7 @@ export function FireMap({
   fitToSelection,
   buffers,
   enableAlerts,
+  alertsDefaultVisible = true,
   sceneFootprints,
   sarResults,
 }: FireMapProps) {
@@ -116,7 +121,7 @@ export function FireMap({
   firesRef.current = fires
 
   const [alerts, setAlerts] = useState<GeoJSON.FeatureCollection | null>(null)
-  const [alertsVisible, setAlertsVisible] = useState(true)
+  const [alertsVisible, setAlertsVisible] = useState(alertsDefaultVisible)
 
   useEffect(() => {
     if (!enableAlerts) return
@@ -149,17 +154,27 @@ export function FireMap({
       // Alerts added first (bottom of stack) - covers huge regional areas,
       // shouldn't visually dominate the fire-specific layers above it.
       map.addSource(ALERTS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      // Initial visibility set explicitly here (not left to the toggle
+      // effect below) - that effect bails out via its own isStyleLoaded()
+      // guard on first mount, since the map hasn't finished loading yet
+      // at that point, so it never actually applies the correct starting
+      // state. Only matters when the desired default is 'none' (Fire
+      // Detail) - harmless no-op when it's 'visible' (the MapLibre
+      // default anyway), which is why this stayed invisible until now.
+      const initialAlertsVisibility = alertsDefaultVisible ? 'visible' : 'none'
       map.addLayer({
         id: ALERTS_FILL_LAYER_ID,
         type: 'fill',
         source: ALERTS_SOURCE_ID,
-        paint: { 'fill-color': ALERTS_COLOR, 'fill-opacity': 0.08 },
+        layout: { visibility: initialAlertsVisibility },
+        paint: { 'fill-color': ALERTS_COLOR, 'fill-opacity': 0.11 },
       })
       map.addLayer({
         id: ALERTS_LINE_LAYER_ID,
         type: 'line',
         source: ALERTS_SOURCE_ID,
-        paint: { 'line-color': ALERTS_COLOR, 'line-width': 1, 'line-dasharray': [3, 2] },
+        layout: { visibility: initialAlertsVisibility },
+        paint: { 'line-color': ALERTS_COLOR, 'line-width': 1.25, 'line-dasharray': [3, 2] },
       })
 
       // Outline only, no fill - a full Sentinel-1 IW swath is ~250km wide

@@ -51,9 +51,17 @@ COPY requirements.txt .
 # python3-gdal, which apt/dpkg installs its own numpy for - pip can't
 # uninstall a dpkg-managed package (no RECORD file) when resolving our
 # pinned numpy==2.4.2, so tell it to overwrite in place instead.
+# Order matters: numpy (from requirements.txt) must be installed BEFORE
+# GDAL - GDAL's Python bindings have a compiled C extension (_gdal_array)
+# that links against whatever numpy ABI is present at its own build time.
+# Installing GDAL first (the original order here) let it link against
+# some other numpy version, which requirements.txt's numpy==2.4.2 then
+# silently invalidated - crashed the container on its very first import
+# with "numpy.core.multiarray failed to import", caught from a real job's
+# CloudWatch logs before any actual pipeline work had run.
 RUN GDAL_VERSION=$(gdal-config --version) && \
-    pip install --no-cache-dir --break-system-packages --ignore-installed GDAL==${GDAL_VERSION} && \
-    pip install --no-cache-dir --break-system-packages --ignore-installed -r requirements.txt
+    pip install --no-cache-dir --break-system-packages --ignore-installed -r requirements.txt && \
+    pip install --no-cache-dir --break-system-packages --ignore-installed --no-deps GDAL==${GDAL_VERSION}
 
 COPY pipeline/ pipeline/
 COPY entrypoint.py .

@@ -47,14 +47,21 @@ estimates are currently `null` — the Census population lookup is built
 and its geometry half is verified live, but the ACS Data API key was only
 just requested and hasn't arrived yet (see `DECISIONS.md`).
 
-Now building toward the project's original point: automatically
+The project's original point is now live end-to-end: automatically
 identifying the highest-priority fires (weighted building/population
-score) and, once a human confirms, triggering Sentinel-1 SAR change-
-detection analysis — reusing the core science from a separate existing
-SAR wildfire pipeline (`../LAwildfireSAR`, built for the January 2025 LA
-fires), with human-confirmed scene selection replacing what would
-otherwise be a genuine ML/geometry research problem (automated Sentinel-1
-track/orbit planning). Full design in `DECISIONS.md`.
+score), a human-confirmed Sentinel-1 scene picker, and — once confirmed —
+real dispatched compute (AWS Batch on Fargate) running the same RTC/
+change-detection science as a separate existing SAR wildfire pipeline
+(`../LAwildfireSAR`, built for the January 2025 LA fires), with results
+(burn area, building damage classification) shown back on the fire's page.
+Full design and real measured runtimes in `DECISIONS.md`/`PROGRESS.md`.
+
+RTC processing (SNAP/GPT) is currently the dominant cost in wall-clock
+time per scene — a few concrete, mostly-low-cost architecture options for
+speeding this up (GPT thread tuning, parallelizing scene processing) are
+identified but deliberately not yet built, since this is a demo running a
+handful of fires, not a production throughput problem. See `PROGRESS.md`'s
+backlog for the full breakdown.
 
 Phase 3 (wind/fuel risk) remains documented but not started.
 

@@ -126,6 +126,8 @@ export function FireDetail() {
               after: acquisitionScenes.after.map((s) => s.footprint).filter((f): f is GeoJSON.Geometry => f != null),
             }}
             sarResults={acquisitionResults}
+            enableAlerts
+            alertsDefaultVisible={false}
           />
           {weather?.wind.direction_degrees != null && (
             <div

@@ -20,7 +20,7 @@ import { AdminKeyModal } from './AdminKeyModal'
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', Icon: DashboardIcon },
   { to: '/map', label: 'Map', Icon: MapIcon },
-  { to: '/reference', label: 'Reference', Icon: ReferenceIcon },
+  { to: '/reference', label: 'Methodology', Icon: ReferenceIcon },
 ]
 
 export function Layout() {

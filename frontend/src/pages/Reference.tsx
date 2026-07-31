@@ -1,10 +1,57 @@
 import { StatCard } from '../components/StatCard'
 import { AreaIcon } from '../components/icons'
+import { PipelineDiagram, type PipelineStep } from '../components/PipelineDiagram'
+import { ParamChips } from '../components/ParamChips'
+
+const SAR_PIPELINE_STEPS: PipelineStep[] = [
+  {
+    number: '01',
+    eyebrow: 'Input',
+    title: 'Scene download',
+    bullets: ['Sentinel-1 IW GRD, VV+VH', 'Human-picked via the acquisition workflow'],
+    accent: 'red',
+  },
+  {
+    number: '02',
+    eyebrow: 'Process',
+    title: 'RTC processing (SNAP)',
+    bullets: ['Radiometric terrain correction (gamma0)', '20m pixel spacing, per-fire UTM zone'],
+    accent: 'orange',
+  },
+  {
+    number: '03',
+    eyebrow: 'Combine',
+    title: 'Composite or single-pair',
+    bullets: ['Median of 3 dates (Composite)', 'or 1 date directly (Single-pair fallback)'],
+    accent: 'yellow',
+  },
+  {
+    number: '04',
+    eyebrow: 'Detect',
+    title: 'Change detection',
+    bullets: ['Log-ratio, VV+VH combined magnitude', 'Fixed threshold → burn mask + building damage'],
+    accent: 'yellow',
+  },
+  {
+    number: '05',
+    eyebrow: 'Output',
+    title: 'Results',
+    bullets: ['Burn perimeter + building damage GeoJSON', "Shown on the fire's own page"],
+    accent: 'green',
+  },
+]
+
+const SAR_PARAMS = [
+  { label: 'Damage threshold', value: '2.9 dB' },
+  { label: 'Pixel spacing', value: '20 m' },
+  { label: 'Min patch size', value: '0.1 ha' },
+  { label: 'Composite size', value: '3 scenes/side' },
+]
 
 export function Reference() {
   return (
     <div className="reference-page">
-      <h1>Reference</h1>
+      <h1>Methodology &amp; References</h1>
       <p className="page-subtitle">Plain-language methodology and data sources</p>
 
       <section>
@@ -14,11 +61,12 @@ export function Reference() {
           population near each fire's perimeter, and surfaces a priority score to help identify
           which fires are worth a closer look. From there, it supports a human-in-the-loop
           workflow for marking a fire for follow-up Sentinel-1 SAR (satellite radar) imagery
-          analysis - browsing real candidate before/after scenes and recording a decision, though
-          the actual SAR processing step isn't built yet (see below). This is a portfolio/demo
-          project, not an operational emergency response tool - figures are sourced and dated
-          below, and gaps or accuracy limits in the underlying open data are stated rather than
-          hidden.
+          analysis - browsing real candidate before/after scenes, and once confirmed, dispatching
+          real compute (AWS Batch) that runs change detection and building-damage classification
+          - see <a href="#sar-methodology">how the SAR workflow works</a> below. This is a
+          portfolio/demo project, not an operational emergency response tool - figures are sourced
+          and dated below, and gaps or accuracy limits in the underlying open data are stated
+          rather than hidden.
         </p>
       </section>
 
@@ -175,6 +223,13 @@ export function Reference() {
 
       <section>
         <h2>How the priority score works</h2>
+        <ParamChips
+          params={[
+            { label: 'Exposure weight', value: '50 pts' },
+            { label: 'Fire-scale weight', value: '50 pts' },
+            { label: 'Band weighting', value: '4 : 3 : 2 : 1' },
+          ]}
+        />
         <p>
           Each tracked fire gets a 0-100 score from two equally-weighted pillars:{' '}
           <strong>exposure</strong> (up to 50 points: buildings + population, weighted 4/3/2/1
@@ -211,13 +266,31 @@ export function Reference() {
           geometry/ML problem, not just an engineering one.
         </p>
         <p>
-          <strong>"Confirm &amp; proceed" only records the decision.</strong> No SAR processing is
-          dispatched yet - the compute pipeline (downloading and processing the chosen scenes,
-          running change detection, publishing results) is a separate, not-yet-built phase.
+          <strong>"Confirm &amp; proceed" dispatches real compute</strong> on AWS Batch/Fargate -
+          the selected scenes are downloaded, radiometrically terrain-corrected, compared for
+          change, and classified against nearby buildings. Below is that pipeline, and the fixed
+          parameters it runs with:
         </p>
+        <PipelineDiagram steps={SAR_PIPELINE_STEPS} />
+        <ParamChips params={SAR_PARAMS} />
+        <div className="stat-row">
+          <StatCard label="F1 score (validated conditions)" value="≈0.80" accent="green" />
+        </div>
+        <div className="honesty-warning-card">
+          <span aria-hidden="true">⚠️</span>
+          <span>
+            That F1 score was measured against two specific California fires, using Microsoft's
+            building-footprint dataset and a threshold calibrated against real post-fire damage
+            inspection records. This tool uses OpenStreetMap buildings instead (see{' '}
+            <a href="#known-limitations">known limitations</a>) and the same fixed threshold applied
+            to every fire, with no equivalent ground truth to check it against in a live response.{' '}
+            <strong>Treat every SAR result on this site as illustrative of the method, not as a
+            validated damage assessment for that specific fire.</strong>
+          </span>
+        </div>
       </section>
 
-      <section>
+      <section id="known-limitations">
         <h2>Known limitations</h2>
         <ul>
           <li>
@@ -244,8 +317,14 @@ export function Reference() {
           </li>
           <li>
             SAR acquisition scene picking shows real, live candidates and a real coverage check,
-            but does not automate orbit/track selection, and does not yet dispatch any actual SAR
-            processing.
+            but does not automate orbit/track selection - a human still picks the scenes. Once
+            confirmed, real compute runs on AWS (see <a href="#sar-methodology">above</a>).
+          </li>
+          <li>
+            SAR RTC processing currently takes on the order of an hour per scene, dominated by the
+            terrain-flattening step - a few architecture options exist to speed this up (more
+            parallelism, tuned SNAP settings) but weren't worth building for a demo processing a
+            handful of fires rather than a production volume.
           </li>
         </ul>
       </section>

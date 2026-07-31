@@ -93,13 +93,19 @@ def main() -> None:
     os.makedirs(SNAP_AUX_PATH, exist_ok=True)
 
     cdse_user, cdse_password = download.get_cdse_credentials()
-    token = download.get_access_token(cdse_user, cdse_password)
 
     # --- Download + RTC process every selected scene ---
     all_scenes = [(s, "before") for s in before_scenes] + [(s, "after") for s in after_scenes]
     scene_dates: dict[str, list[str]] = {"before": [], "after": []}
 
     for scene, side in all_scenes:
+        # A fresh token per scene, not one fetched upfront for the whole
+        # loop - CDSE's access tokens are short-lived, and RTC processing
+        # (the Terrain-Correction step alone) can take ~30 minutes per
+        # scene, so a token that was valid at job start is long expired by
+        # the time a later scene's download is attempted. Confirmed live:
+        # the original single-upfront-token design 401'd on exactly this.
+        token = download.get_access_token(cdse_user, cdse_password)
         local_path = download.download_scene(scene["id"], scene["name"], token, RAW_DIR)
         process.process_scene(local_path, RTC_DIR, target_crs, SNAP_AUX_PATH)
         scene_dates[side].append(scene["date"][:10])  # YYYY-MM-DD

@@ -193,6 +193,32 @@ behind anything marked as a real choice, not just what got built.
       (see `SAR_METHODOLOGY.md` §8.1), not just a workaround - meaningfully
       more complex (raster mosaicking logic in the compute pipeline, not
       picker UI), raised 2026-07-30, not in scope now.
+- [x] **SAR compute runtime/cost optimization** (2026-07-31, analyzed from a
+      real job's measured timings): Terrain-Flattening is ~88% of
+      per-scene RTC processing time (~46 of ~52 min measured on a real
+      Aspen Acres run) - everything else (download, other GPT steps) is
+      noise by comparison; scene download speed is not the bottleneck.
+      **Checked directly rather than left as a hypothesis**: ran
+      `gpt -h` inside the actual built image - SNAP's GPT defaults to
+      parallelism **20** (`-q 20`), meaning it was already trying to use
+      far more threads than the job definition's original 4 vCPUs could
+      offer - the container was core-starved, not under-configured.
+      **Applied**: bumped the job definition from 4 vCPU/16GB to 8
+      vCPU/32GB (revision 4) - a pure resourceRequirements edit, no code
+      changes. Cost roughly doubles per-hour but should be close to
+      cost-neutral in total if wall-clock drops proportionally (Fargate
+      bills per-second); trivial in absolute dollars at this project's
+      2-3-demo-fire volume either way. Compute environment's `maxvCpus`
+      (already 8) needed no change. Still queued, not done (would need
+      real engineering, not a settings tweak, and are lower priority
+      given the above already targets the actual measured bottleneck):
+      parallelizing across scenes (matters most for Composite mode's 6
+      sequential scenes) and EC2 Spot-backed Batch (cheaper per hour, but
+      real interruption risk on an hours-long job with no checkpointing).
+      Explicitly not worth pursuing: replacing SNAP/GPT itself - would
+      break direct methodological comparability with the validated
+      original `LAwildfireSAR` pipeline, which is the whole point of
+      reusing this stack.
 - Explicitly parked, not planned: "evacuation routes" as a labeled feature
   - no standardized national data source exists for real evacuation
     routes; the basemap already shows roads, so a dedicated OSM-highways
@@ -558,13 +584,33 @@ loop scene picking instead.
         geometry_limited each get a distinct color) with a legend
         alongside the existing scene-footprint one. Frontend build and
         backend imports both verified clean.
-  - [ ] **Not yet done**: a real end-to-end test (confirm an actual fire,
-        watch the job run to completion, verify a result lands and
-        displays correctly). Every piece has been verified independently
-        (image builds, roles resolve, resources are healthy, frontend
-        builds clean) but the full chain hasn't been exercised together
-        yet — this is the next concrete step, and the first real chance
-        to sanity-check the SNAP 10.0→13.0 jump noted above.
+  - [ ] **First real end-to-end attempts (2026-07-31, Aspen Acres,
+        Single-pair mode)** — three real bugs found and fixed, none
+        hypothetical:
+        1. GDAL's Python bindings linked against the wrong numpy ABI at
+           build time (Dockerfile installed GDAL before `requirements.txt`'s
+           numpy==2.4.2) — crashed on the very first import. Fixed by
+           installing numpy first, GDAL last (`--no-deps` so it doesn't
+           re-pull numpy itself).
+        2. CDSE's access token was fetched once upfront and reused for
+           every scene download - but RTC processing (~30-50 min/scene,
+           mostly the Terrain-Flattening step) outlasts the token's
+           lifetime, so later scenes 401'd. Fixed: fetch a fresh token
+           immediately before each scene's download, not once for the
+           whole job.
+        3. **Ran out of disk mid-job**: `java.io.IOException: No space
+           left on device` writing the second scene's RTC output - Fargate
+           defaults to 20 GiB ephemeral storage, nowhere near enough for
+           multiple scenes' raw downloads + RTC intermediates + SNAP's own
+           tile cache (the original pipeline's own docs note "tens of GB"
+           for a full multi-scene run). Fixed: job definition now requests
+           100 GiB (`ephemeralStorage.sizeInGiB`), registered as revision
+           3 - negligible cost impact (ephemeral storage beyond the free
+           20GiB tier is billed at a fraction of a cent per GB-hour).
+        Still no fully successful run as of this writing - retrying with
+        all three fixes in place is the immediate next step, and also the
+        first real chance to sanity-check the SNAP 10.0→13.0 jump noted
+        above.
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of

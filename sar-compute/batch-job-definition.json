@@ -7,9 +7,10 @@
   "containerProperties": {
     "image": "497537671259.dkr.ecr.eu-north-1.amazonaws.com/wildfiredashboard-sar-compute:latest",
     "resourceRequirements": [
-      { "type": "VCPU", "value": "4" },
-      { "type": "MEMORY", "value": "16384" }
+      { "type": "VCPU", "value": "8" },
+      { "type": "MEMORY", "value": "32768" }
     ],
+    "ephemeralStorage": { "sizeInGiB": 100 },
     "executionRoleArn": "arn:aws:iam::497537671259:role/wildfiredashboard-sar-execution",
     "jobRoleArn": "arn:aws:iam::497537671259:role/wildfiredashboard-sar-task",
     "environment": [

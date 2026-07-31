@@ -1331,3 +1331,147 @@
   padding-left: 20px;
   line-height: 1.7;
 }
+
+/* Parameter chips - small "known constants" callouts (threshold, pixel
+   spacing, etc.), styled distinctly from prose so a reader can scan the
+   actual numbers without reading every paragraph. */
+.param-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 20px;
+}
+
+.param-chip {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  min-width: 120px;
+}
+
+.param-chip-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.param-chip-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+/* Pipeline diagram - numbered stage cards with a connecting arrow,
+   each stage's top border color-coded to a rough "how far along the
+   process" progression (matches the buffer-ring red->orange->yellow
+   outward-heat convention used elsewhere, extended with green for
+   "finished/output"). */
+.pipeline-diagram {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 4px;
+  margin: 16px 0 8px;
+}
+
+.pipeline-step-wrap {
+  display: flex;
+  align-items: center;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.pipeline-step {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--border);
+}
+
+.pipeline-step--red {
+  border-top-color: var(--accent-red);
+}
+.pipeline-step--orange {
+  border-top-color: var(--accent-orange);
+}
+.pipeline-step--yellow {
+  border-top-color: var(--accent-yellow);
+}
+.pipeline-step--green {
+  border-top-color: var(--accent-green);
+}
+
+.pipeline-step-eyebrow {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.pipeline-step-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin-bottom: 8px;
+}
+
+.pipeline-step-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.pipeline-step-bullets li {
+  margin-bottom: 3px;
+}
+
+.pipeline-arrow {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+@media (max-width: 900px) {
+  .pipeline-diagram {
+    flex-direction: column;
+  }
+  .pipeline-step-wrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pipeline-arrow {
+    transform: rotate(90deg);
+    align-self: center;
+    padding: 4px 0;
+  }
+}
+
+/* Honesty warning card - a validated-metric stat card next to this reads
+   as more credible specifically because the limitation sits right next
+   to the number, not buried further down the page. */
+.honesty-warning-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid var(--accent-yellow);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.honesty-warning-card strong {
+  color: var(--text-heading);
+}
