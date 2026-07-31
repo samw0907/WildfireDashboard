@@ -1,8 +1,12 @@
 # SAR compute image dependencies - adapted from LAwildfireSAR's own
-# requirements.txt (same pyroSAR/RTC processing stack), trimmed:
-# matplotlib/contextily/pillow dropped since this produces data outputs
-# (GeoJSON, rasters) for the dashboard frontend to render via MapLibre,
-# not static figures the way the original portfolio project did.
+# requirements.txt (same pyroSAR/RTC processing stack).
+#
+# matplotlib/contextily/pillow were dropped early in this project's build
+# (dashboard's interactive MapLibre map was meant to replace static
+# figures) - reinstated 2026-07-31 after comparing real output against
+# LAwildfireSAR's own figures: the before/after backscatter comparison
+# specifically can't be shown by a vector map at all, only a rendered
+# raster image. See pipeline/figures.py.
 #
 # GDAL requires a pre-built wheel on Windows for local dev; inside the
 # Docker image (Ubuntu) `pip install GDAL==<version>` matching the
@@ -10,9 +14,12 @@
 
 boto3==1.43.36
 botocore==1.43.36
+contextily==1.6.2
 geopandas==1.1.3
 httpx==0.28.1
+matplotlib==3.10.6
 numpy==2.4.2
+pillow==11.3.0
 psycopg2==2.9.12
 pyproj==3.7.2
 pyroSAR==0.36.2

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  acquisitionDownloadUrl,
   confirmAcquisition,
   getAcquisition,
   getAcquisitionCandidates,
   markForAcquisition,
   selectAcquisitionScenes,
   unmarkAcquisition,
+  INLINE_FIGURE_LABELS,
   type Acquisition,
   type AcquisitionCandidates,
   type Scene,
@@ -514,6 +516,37 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange }: Ac
                 against in a live response. {acquisition.result.threshold_note}
               </p>
               <p className="acquisition-honesty-note">{acquisition.result.building_dataset_note}</p>
+
+              {INLINE_FIGURE_LABELS.some(({ key }) => acquisition.result!.files[key]) && (
+                <div className="figure-gallery">
+                  {INLINE_FIGURE_LABELS.filter(({ key }) => acquisition.result!.files[key]).map(({ key, title }) => (
+                    <figure key={key} className="figure-item">
+                      <img
+                        src={acquisitionDownloadUrl(fireId, acquisition.result!.files[key])}
+                        alt={title}
+                        loading="lazy"
+                      />
+                      <figcaption>{title}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
+
+              {Object.keys(acquisition.result.files).length > 0 && (
+                <div className="acquisition-downloads">
+                  <h5>Download results</h5>
+                  <ul>
+                    {Object.entries(acquisition.result.files).map(([label, filename]) => (
+                      <li key={label}>
+                        <a href={acquisitionDownloadUrl(fireId, filename)} download>
+                          {label.replace(/_/g, ' ')}
+                        </a>{' '}
+                        <span className="download-filename">({filename})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

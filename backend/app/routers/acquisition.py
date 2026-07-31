@@ -11,14 +11,17 @@ free (no CDSE auth needed) so it stays open for browsing.
 
 from datetime import datetime, timedelta, timezone
 
+import boto3
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from shapely.geometry import shape
 from sqlalchemy.orm import Session
 
 from .. import cdse, geo
 from ..auth import require_admin_key
 from ..batch import submit_sar_job
+from ..config import get_settings
 from ..db import SessionLocal
 from ..models import Fire
 from ..schemas import AcquisitionCandidatesOut, AcquisitionOut, AcquisitionSelectIn, SceneOut
@@ -121,6 +124,29 @@ def _to_acquisition_out(fire: Fire) -> AcquisitionOut:
 def get_acquisition(fire_id: str, db: Session = Depends(get_db)):
     fire = _get_fire_or_404(db, fire_id)
     return _to_acquisition_out(fire)
+
+
+@router.get("/fires/{fire_id}/acquisition/download/{filename}")
+def download_acquisition_file(fire_id: str, filename: str, db: Session = Depends(get_db)):
+    """Redirects to a short-lived presigned S3 URL - the results bucket
+    blocks all public access (see DECISIONS.md Phase D), so this is the
+    only way the frontend can offer a plain <a href>/<img src> download
+    link without exposing the bucket itself. Public/read-only, matching
+    every other GET here - these are just result files, not anything
+    sensitive, and downloading one costs nothing."""
+    fire = _get_fire_or_404(db, fire_id)
+    manifest = (fire.acquisition_result or {}).get("files", {})
+    if filename not in manifest.values():
+        raise HTTPException(status_code=404, detail="File not found for this fire's acquisition results")
+
+    settings = get_settings()
+    client = boto3.client("s3", region_name=settings.aws_region)
+    url = client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.sar_results_bucket, "Key": f"acquisitions/{fire_id}/{filename}"},
+        ExpiresIn=300,
+    )
+    return RedirectResponse(url)
 
 
 @router.get("/fires/{fire_id}/acquisition/candidates", response_model=AcquisitionCandidatesOut)

@@ -164,6 +164,19 @@ def run_change_detection(
 
     logger.info("Clipping to fire perimeter...")
     combined_clipped, clipped_profile = clip_to_perimeter(combined, profile, perimeter_geojson)
+    # Written separately from the unclipped change_combined.tif above -
+    # this clipped version is what building damage classification samples
+    # (see buildings.py/entrypoint.py), not the whole-scene raster. A
+    # building outside the fire's own perimeter has no methodological
+    # basis for a "this fire damaged it" classification even if the
+    # underlying pixels show real change - a month-apart before/after
+    # pair can pick up genuine non-fire signal (snowmelt, soil moisture,
+    # agriculture, even an unrelated fire elsewhere in the same ~250km
+    # scene) anywhere outside the area the fire actually touched. Confirmed
+    # live this was happening: a real Aspen Acres run classified buildings
+    # 2km+ outside the perimeter as "destroyed" from real but unrelated
+    # backscatter change.
+    write_raster(combined_clipped, clipped_profile, os.path.join(output_dir, "change_combined_clipped.tif"))
 
     pixel_area_ha = (PIXEL_SPACING_METERS**2) / 10000
     min_pixels = int(MIN_PATCH_HECTARES / pixel_area_ha)
@@ -186,6 +199,7 @@ def run_change_detection(
 
     return {
         "change_combined_path": os.path.join(output_dir, "change_combined.tif"),
+        "change_combined_clipped_path": os.path.join(output_dir, "change_combined_clipped.tif"),
         "burn_mask_path": os.path.join(output_dir, "burn_mask.tif"),
         "burn_perimeter_path": burn_path if len(burn_gdf) else None,
         "total_area_ha": float(total_area_ha),

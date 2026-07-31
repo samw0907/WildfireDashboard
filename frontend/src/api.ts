@@ -158,6 +158,24 @@ export interface AcquisitionResultSummary {
   threshold_note: string
   building_dataset: string
   building_dataset_note: string
+  // {label: filename} for every file actually produced - fetch via
+  // acquisitionDownloadUrl(fireId, filename), not directly (the results
+  // bucket is private, this is a label->filename map, not a URL map).
+  files: Record<string, string>
+}
+
+// Figures worth rendering inline on the Fire Detail page, in display
+// order - anything else in `files` (raw GeoTIFFs/GeoJSON, the summary
+// itself) is download-only, not inlined. Matches the labels
+// sar-compute/pipeline/figures.py actually produces.
+export const INLINE_FIGURE_LABELS: { key: string; title: string }[] = [
+  { key: 'overview_map', title: 'Overview' },
+  { key: 'damage_zoom_map', title: 'Building Damage (zoomed)' },
+  { key: 'backscatter_panel', title: 'Backscatter Comparison' },
+]
+
+export function acquisitionDownloadUrl(fireId: string, filename: string): string {
+  return `${API_BASE_URL}/api/fires/${fireId}/acquisition/download/${encodeURIComponent(filename)}`
 }
 
 export interface Acquisition {

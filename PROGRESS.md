@@ -607,10 +607,48 @@ loop scene picking instead.
            100 GiB (`ephemeralStorage.sizeInGiB`), registered as revision
            3 - negligible cost impact (ephemeral storage beyond the free
            20GiB tier is billed at a fraction of a cent per GB-hour).
-        Still no fully successful run as of this writing - retrying with
-        all three fixes in place is the immediate next step, and also the
-        first real chance to sanity-check the SNAP 10.0→13.0 jump noted
-        above.
+        With all three fixed, the retry **succeeded end-to-end** (Aspen
+        Acres, Single-pair mode) - first real result. Also applied the
+        8vCPU/32GB job definition change discussed separately (revision
+        4) - Terrain-Flattening dropped from ~46 min to a measured
+        **23 min**, a clean ~2x, better than the conservative 60-75%-
+        efficiency estimate given beforehand.
+
+        **Real methodology finding from inspecting the actual result**
+        (2026-07-31, caught by the user loading the raw output in QGIS,
+        not by anything in the pipeline itself): a meaningful number of
+        buildings **outside the fire's own perimeter** were classified
+        "destroyed." Root-caused in the code, not assumed: building
+        damage classification (`buildings.py`) was sampling
+        `change_combined.tif` - the **unclipped, whole-scene** change
+        raster - for every building in the cached 2,400m exposure buffer,
+        with nothing scoping the check to the fire itself. A building
+        2km+ from the fire showing "destroyed" was a real measurement,
+        just of unrelated real change (most likely seasonal snowmelt or
+        soil-moisture difference between the June 17 → July 17 dates,
+        possibly an unrelated fire elsewhere in the same ~250km scene -
+        this is the "vegetation/burn-scar confound" gap already flagged
+        as unaddressed in `SAR_METHODOLOGY.md` §5, now seen concretely).
+        **Fixed**: `change.py` now also writes the perimeter-*clipped*
+        combined raster (`change_combined_clipped.tif`) and building
+        classification samples that instead - a building outside the
+        perimeter has no methodological basis for a fire-attribution
+        claim regardless of what real change is measured there. Chose a
+        strict clip (not perimeter+buffer) specifically because the
+        confound isn't distance-based - a buffered building just outside
+        the fire's edge is exposed to the same snowmelt/soil-moisture
+        noise as one further away, not meaningfully protected by
+        proximity. Image rebuilt and repushed with this fix; not yet
+        re-verified against a real re-run.
+        **Also flagged, not yet acted on**: the raw `burn_patch_count`
+        (2,106 in the Aspen Acres run) is a misleading headline number on
+        its own - one patch was 35,699 ha (97% of total detected area,
+        plausible given the fire's real ~41,264 ha scale) and the other
+        2,105 were speckle noise (median 0.16 ha, barely above the 0.1 ha
+        minimum-patch filter) - exactly what Single-pair mode's lack of
+        despeckling would be expected to produce, not a bug, but worth
+        presenting more honestly than a raw count once the figures/UI
+        pass (below) happens.
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of

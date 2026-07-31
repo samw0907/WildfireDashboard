@@ -25,7 +25,7 @@ import sys
 
 import httpx
 
-from pipeline import buildings, change, composite, download, s3_sync, process
+from pipeline import buildings, change, composite, download, figures, s3_sync, process
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("sar-compute")
@@ -133,7 +133,11 @@ def main() -> None:
     buildings_gdf = buildings.run_buildings(
         api_base_url=api_base_url,
         fire_id=fire_id,
-        change_raster_path=change_result["change_combined_path"],
+        # Clipped to the fire's own perimeter, not the whole-scene raster -
+        # a building outside the perimeter has no methodological basis for
+        # a fire-caused damage classification even when the underlying
+        # pixels show real change (see change.py's run_change_detection).
+        change_raster_path=change_result["change_combined_clipped_path"],
         rtc_dir=RTC_DIR,
         reference_date=scene_dates["before"][0],
         target_crs=target_crs,
@@ -141,6 +145,37 @@ def main() -> None:
     )
 
     damage_counts = buildings_gdf["damage_class"].value_counts().to_dict()
+
+    # --- Static figures (matplotlib/contextily) - see pipeline/figures.py
+    # for why these came back after being dropped earlier in the build ---
+    figure_paths = figures.run_figures(
+        perimeter_geojson=fire["perimeter"],
+        target_crs=target_crs,
+        buildings_gdf=buildings_gdf,
+        burn_perimeter_path=change_result["burn_perimeter_path"],
+        pre_vv_path=pre_vv_path,
+        post_vv_path=post_vv_path,
+        change_combined_clipped_path=change_result["change_combined_clipped_path"],
+        threshold_db=change.THRESHOLD_COMBINED_DB,
+        output_dir=ANALYSIS_DIR,
+    )
+
+    # --- Files to sync to S3 - built once, reused for both the summary's
+    # own file manifest (below) and the actual upload, so the two can
+    # never drift out of sync with each other. Raw per-scene RTC rasters
+    # (previously discarded once change-detection consumed them) are
+    # included now so the before/after backscatter is independently
+    # downloadable, not just visible inside the backscatter_panel figure.
+    sync_files = {
+        "burn_perimeter": change_result["burn_perimeter_path"],
+        "building_damage": buildings_output_path,
+        "change_combined": change_result["change_combined_path"],
+        "rtc_pre_vv": pre_vv_path,
+        "rtc_post_vv": post_vv_path,
+        "rtc_pre_vh": pre_vh_path,
+        "rtc_post_vh": post_vh_path,
+        **figure_paths,
+    }
 
     # --- Result summary - the compact JSON Phase E's Fire Detail UI reads,
     # rather than parsing the full GeoJSON/rasters directly ---
@@ -167,24 +202,23 @@ def main() -> None:
             "The original pipeline's F1~0.80 was validated against Microsoft's building footprints, "
             "not OSM - that figure does not transfer to this dataset."
         ),
+        # {label: filename} for every file actually produced (a missing
+        # path, e.g. no burn detected at all, is just omitted rather than
+        # included as null) - matches s3_sync's own deterministic
+        # acquisitions/{fire_id}/{filename} key convention exactly, so the
+        # backend/frontend can construct download URLs without needing a
+        # separate manifest fetch.
+        "files": {label: os.path.basename(path) for label, path in sync_files.items() if path},
     }
     summary_path = os.path.join(ANALYSIS_DIR, "result_summary.json")
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
     logger.info("Result summary: %s", json.dumps(summary, indent=2))
 
-    # --- Sync results to S3 ---
-    s3_sync.run_sync(
-        fire_id=fire_id,
-        bucket=s3_bucket,
-        region=aws_region,
-        files={
-            "summary": summary_path,
-            "burn_perimeter": change_result["burn_perimeter_path"],
-            "building_damage": buildings_output_path,
-            "change_combined": change_result["change_combined_path"],
-        },
-    )
+    # --- Sync results to S3 (summary included last so its own "files" key
+    # already reflects everything else being uploaded alongside it) ---
+    sync_files["summary"] = summary_path
+    s3_sync.run_sync(fire_id=fire_id, bucket=s3_bucket, region=aws_region, files=sync_files)
 
     logger.info("SAR compute job complete for fire %s", fire_id)
 
