@@ -649,6 +649,38 @@ loop scene picking instead.
         despeckling would be expected to produce, not a bug, but worth
         presenting more honestly than a raw count once the figures/UI
         pass (below) happens.
+
+        **Second real run, a different fire near Boise, ID (2026-07-31),
+        confirms the perimeter-clipping fix worked exactly as intended**:
+        `building_damage_counts` went from Aspen Acres' 1,059 "destroyed"
+        out of 3,244 (33%, dominated by out-of-perimeter false positives)
+        to just **2 "destroyed" out of 8,011**, with 7,952 correctly
+        landing in `no_data` (outside the clipped raster's extent, no
+        longer spuriously classified). Also the first real run with
+        figures reinstated (`pipeline/figures.py`, matplotlib/contextily):
+        all three (overview map, damage zoom map, backscatter panel)
+        generated successfully and were visually verified as real,
+        correct output - basemap tiles fetched live, perimeter/damage
+        geometry aligned correctly, backscatter imagery and the
+        change-magnitude heatmap both rendered as expected.
+
+        **Real bug caught testing the new download endpoint** (not
+        hypothetical - reproduced and root-caused before fixing):
+        `GET /api/fires/{id}/acquisition/download/{filename}` returned a
+        presigned S3 URL that failed with `SignatureDoesNotMatch` when
+        fetched. Cause: `boto3.client("s3", region_name=...)` still
+        defaults to the *global* `s3.amazonaws.com` endpoint even with
+        `region_name` set; S3 replies to that with its own 307 redirect
+        to the real regional endpoint for a non-us-east-1 bucket - fine
+        for a normal signed request (botocore transparently re-signs and
+        retries), fatal for a *presigned* URL, since the signature is
+        baked in for whoever fetches it later and a changed `Host` header
+        invalidates it on the second hop. Fixed by passing an explicit
+        `endpoint_url=f"https://s3.{region}.amazonaws.com"` when building
+        the client used for presigned URLs specifically. Verified fixed
+        by reproducing the exact failure locally, then confirming the
+        corrected client produces a URL that actually fetches (200, valid
+        PNG) before considering it done.
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of

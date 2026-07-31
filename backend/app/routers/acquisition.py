@@ -140,7 +140,18 @@ def download_acquisition_file(fire_id: str, filename: str, db: Session = Depends
         raise HTTPException(status_code=404, detail="File not found for this fire's acquisition results")
 
     settings = get_settings()
-    client = boto3.client("s3", region_name=settings.aws_region)
+    # Explicit regional endpoint_url, not just region_name - boto3's S3
+    # client otherwise defaults to the global s3.amazonaws.com endpoint,
+    # which S3 answers with its own 307 redirect to the real regional
+    # endpoint for a non-us-east-1 bucket. A normal signed request
+    # survives that transparently (botocore re-signs and retries), but a
+    # *presigned* URL can't - the signature is baked in for whoever
+    # fetches it later, and a changed Host header invalidates it,
+    # producing SignatureDoesNotMatch on the client's second hop. Caught
+    # live: the exact failure mode here, not a hypothetical.
+    client = boto3.client(
+        "s3", region_name=settings.aws_region, endpoint_url=f"https://s3.{settings.aws_region}.amazonaws.com"
+    )
     url = client.generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.sar_results_bucket, "Key": f"acquisitions/{fire_id}/{filename}"},
