@@ -10,6 +10,20 @@ import {
   type AcquisitionCandidates,
   type Scene,
 } from '../api'
+import { StatCard } from './StatCard'
+import { AreaIcon, BuildingIcon, FlameIcon } from './icons'
+
+// Friendly labels for buildings.py's classify_damage()/flag_geometry_limited()
+// classes - order matters here (most-to-least severe), the summary table
+// below renders in this order regardless of the object-key order the API
+// returns building_damage_counts in.
+const DAMAGE_CLASS_LABELS: [string, string][] = [
+  ['destroyed', 'Destroyed'],
+  ['possibly_affected', 'Possibly affected'],
+  ['no_damage', 'No damage detected'],
+  ['geometry_limited', 'Geometry-limited (unreliable)'],
+  ['no_data', 'No data'],
+]
 
 // Composite mode (3+3) needs at least 3 dates per side for median
 // compositing to provide real outlier-robustness - median of 2 is
@@ -149,9 +163,15 @@ interface AcquisitionPanelProps {
   // selection, or already saved) so the parent can draw their real
   // footprints on the map for visual context.
   onScenesChange?: (scenes: { before: Scene[]; after: Scene[] }) => void
+  // Reports the SAR compute results once a job completes, so the parent
+  // can draw the burn perimeter / building damage overlays on the map.
+  onResultsChange?: (results: {
+    burnPerimeter: GeoJSON.FeatureCollection | null
+    buildingDamage: GeoJSON.FeatureCollection | null
+  }) => void
 }
 
-export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelProps) {
+export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange }: AcquisitionPanelProps) {
   const [acquisition, setAcquisition] = useState<Acquisition | null>(null)
   const [candidates, setCandidates] = useState<AcquisitionCandidates | null>(null)
   const [selectedTrack, setSelectedTrack] = useState<number | null>(null)
@@ -167,6 +187,14 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBefore, selectedAfter, acquisition?.before_scenes, acquisition?.after_scenes])
+
+  useEffect(() => {
+    onResultsChange?.({
+      burnPerimeter: acquisition?.burn_perimeter ?? null,
+      buildingDamage: acquisition?.building_damage ?? null,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acquisition?.burn_perimeter, acquisition?.building_damage])
 
   const loadAcquisition = () => getAcquisition(fireId).then(setAcquisition).catch(() => setAcquisition(null))
 
@@ -192,6 +220,18 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
         .catch(() => setError('Could not load candidate Sentinel-1 scenes.'))
     }
   }, [acquisition?.status, acquisition?.before_scenes, fireId])
+
+  // The backend's own polling loop (2-minute cadence) is what actually
+  // moves a job from 'processing' to 'complete'/'failed' - without this,
+  // the UI would just sit on "Processing…" until a manual page reload.
+  // Matches the backend's cadence rather than polling faster, since
+  // there's nothing to see more often than that anyway.
+  useEffect(() => {
+    if (acquisition?.status !== 'processing') return
+    const interval = setInterval(loadAcquisition, 120_000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acquisition?.status, fireId])
 
   const trackSummaries = useMemo(() => (candidates ? computeTrackSummaries(candidates) : []), [candidates])
   const activeTrackSummary = trackSummaries.find((t) => t.track === selectedTrack) ?? null
@@ -397,7 +437,7 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
               .map((s) => `${sceneLabel(s)} (${s.aoi_coverage_percent ?? '?'}% coverage)`)
               .join(' · ')}
           </p>
-          {acquisition.status !== 'confirmed' && (
+          {(acquisition.status === 'marked' || acquisition.status === null) && (
             <button
               className="acquisition-confirm-btn"
               disabled={busy}
@@ -406,12 +446,77 @@ export function AcquisitionPanel({ fireId, onScenesChange }: AcquisitionPanelPro
               Confirm &amp; proceed
             </button>
           )}
-          {acquisition.status === 'confirmed' && (
-            <p className="acquisition-confirmed">
-              Confirmed {acquisition.confirmed_at && new Date(acquisition.confirmed_at).toLocaleString()}. SAR
-              processing dispatch isn't wired up yet - this records the decision only.
+
+          {acquisition.status === 'processing' && (
+            <p className="acquisition-processing">
+              <span className="spinner" aria-hidden="true" />
+              SAR compute job running{acquisition.confirmed_at && ` since ${new Date(acquisition.confirmed_at).toLocaleString()}`}.
+              Composite-mode runs typically take 1-3 hours - this page checks for an update automatically, no need to
+              keep it open.
             </p>
           )}
+
+          {acquisition.status === 'failed' && (
+            <div className="acquisition-failed">
+              <p>SAR compute job failed: {acquisition.error ?? 'no reason given.'}</p>
+              <button
+                className="acquisition-confirm-btn"
+                disabled={busy}
+                onClick={() => run(() => confirmAcquisition(fireId), 'Could not resubmit.')}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {acquisition.status === 'complete' && acquisition.result && (
+            <div className="acquisition-results">
+              <h4>SAR Damage Assessment</h4>
+              <div className="stat-row">
+                <StatCard
+                  label="Burn area detected"
+                  value={acquisition.result.total_burn_area_ha.toFixed(1)}
+                  unit=" ha"
+                  accent="red"
+                  icon={FlameIcon}
+                />
+                <StatCard
+                  label="Burn patches"
+                  value={acquisition.result.burn_patch_count}
+                  accent="orange"
+                  icon={AreaIcon}
+                />
+                <StatCard
+                  label="Buildings assessed"
+                  value={acquisition.result.total_buildings_classified}
+                  accent="green"
+                  icon={BuildingIcon}
+                />
+              </div>
+              <table className="damage-table">
+                <tbody>
+                  {DAMAGE_CLASS_LABELS.filter(([key]) => acquisition.result!.building_damage_counts[key] != null).map(
+                    ([key, label]) => (
+                      <tr key={key}>
+                        <td>
+                          <span className={`damage-dot damage-dot--${key}`} />
+                          {label}
+                        </td>
+                        <td>{acquisition.result!.building_damage_counts[key]}</td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+              <p className="acquisition-honesty-note">
+                Damage threshold ({acquisition.result.threshold_db} dB) is inherited from a prior fire's calibration,{' '}
+                <strong>not independently validated for this fire</strong> - no ground truth exists to check it
+                against in a live response. {acquisition.result.threshold_note}
+              </p>
+              <p className="acquisition-honesty-note">{acquisition.result.building_dataset_note}</p>
+            </div>
+          )}
+
           <button
             className="acquisition-cancel-btn"
             disabled={busy}

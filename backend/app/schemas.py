@@ -114,3 +114,16 @@ class AcquisitionOut(BaseModel):
     # that logic itself.
     mode: str | None
     confirmed_at: datetime | None
+    batch_job_id: str | None
+    # result_summary.json's contents once status is 'complete' - see
+    # sar-compute/entrypoint.py for its exact shape.
+    result: dict | None
+    # burn_perimeter.geojson / building_damage.geojson contents, already
+    # reprojected to EPSG:4326 by the pipeline - ready to render directly
+    # as map overlays alongside the fire's perimeter/buildings. burn_perimeter
+    # is None both before completion AND when no burn area was detected at
+    # all (a real, valid outcome) - the frontend can't distinguish those
+    # two cases from this field alone, only from `status`.
+    burn_perimeter: dict | None
+    building_damage: dict | None
+    error: str | None

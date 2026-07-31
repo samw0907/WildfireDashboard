@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from .. import cdse, geo
 from ..auth import require_admin_key
+from ..batch import submit_sar_job
 from ..db import SessionLocal
 from ..models import Fire
 from ..schemas import AcquisitionCandidatesOut, AcquisitionOut, AcquisitionSelectIn, SceneOut
@@ -108,6 +109,11 @@ def _to_acquisition_out(fire: Fire) -> AcquisitionOut:
         after_scenes=[SceneOut(**s) for s in after_scenes],
         mode=_acquisition_mode(before_scenes),
         confirmed_at=fire.acquisition_confirmed_at,
+        batch_job_id=fire.acquisition_batch_job_id,
+        result=fire.acquisition_result,
+        burn_perimeter=fire.acquisition_burn_perimeter,
+        building_damage=fire.acquisition_building_damage,
+        error=fire.acquisition_error,
     )
 
 
@@ -201,10 +207,28 @@ def confirm_acquisition(fire_id: str, db: Session = Depends(get_db)):
     if not fire.acquisition_before_scenes or not fire.acquisition_after_scenes:
         raise HTTPException(status_code=400, detail="Select both before and after scenes before confirming")
 
-    fire.acquisition_status = "confirmed"
     fire.acquisition_confirmed_at = datetime.now(timezone.utc)
+
+    # Submitted synchronously in the same request rather than handed off to
+    # the polling loop to kick off - the loop's job is only to watch jobs
+    # already in flight, not to discover newly-confirmed fires itself,
+    # since "confirm" is already an explicit human action with its own
+    # admin-gated endpoint. A submission failure here (bad AWS config,
+    # Batch unreachable) surfaces immediately to the operator instead of
+    # silently sitting in 'confirmed' forever.
+    try:
+        job_id = submit_sar_job(fire_id)
+    except Exception as exc:
+        fire.acquisition_status = "failed"
+        fire.acquisition_error = f"Failed to submit compute job: {exc}"
+        db.commit()
+        raise HTTPException(status_code=502, detail=fire.acquisition_error) from exc
+
+    fire.acquisition_status = "processing"
+    fire.acquisition_batch_job_id = job_id
+    fire.acquisition_error = None
     db.commit()
-    return {"status": "confirmed"}
+    return {"status": "processing", "batch_job_id": job_id}
 
 
 @router.post("/fires/{fire_id}/acquisition/unmark", dependencies=[Depends(require_admin_key)])
@@ -214,5 +238,10 @@ def unmark_acquisition(fire_id: str, db: Session = Depends(get_db)):
     fire.acquisition_before_scenes = None
     fire.acquisition_after_scenes = None
     fire.acquisition_confirmed_at = None
+    fire.acquisition_batch_job_id = None
+    fire.acquisition_result = None
+    fire.acquisition_burn_perimeter = None
+    fire.acquisition_building_damage = None
+    fire.acquisition_error = None
     db.commit()
     return {"status": "unmarked"}

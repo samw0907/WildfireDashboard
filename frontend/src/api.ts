@@ -139,8 +139,29 @@ export interface AcquisitionCandidates {
   after: Scene[]
 }
 
+// Compact result_summary.json contents - see sar-compute/entrypoint.py for
+// exactly what's produced. Honesty fields (threshold/building-dataset
+// notes) are carried through as plain strings so the UI renders them
+// verbatim rather than re-deriving its own wording.
+export interface AcquisitionResultSummary {
+  fire_id: string
+  mode: 'composite' | 'single_pair'
+  before_scenes: string[]
+  after_scenes: string[]
+  target_crs: number
+  total_burn_area_ha: number
+  burn_patch_count: number
+  building_damage_counts: Record<string, number>
+  total_buildings_classified: number
+  threshold_db: number
+  threshold_validated: boolean
+  threshold_note: string
+  building_dataset: string
+  building_dataset_note: string
+}
+
 export interface Acquisition {
-  status: 'marked' | 'confirmed' | null
+  status: 'marked' | 'confirmed' | 'processing' | 'complete' | 'failed' | null
   before_scenes: Scene[]
   after_scenes: Scene[]
   // 'composite' (3+3, real median-compositing benefit) | 'single_pair'
@@ -148,6 +169,15 @@ export interface Acquisition {
   // selected yet - deliberately no in-between size, see SAR_METHODOLOGY.md §8.
   mode: 'composite' | 'single_pair' | null
   confirmed_at: string | null
+  batch_job_id: string | null
+  result: AcquisitionResultSummary | null
+  // Already reprojected to EPSG:4326 by the pipeline - render directly
+  // alongside the fire's own perimeter/buildings layers. burn_perimeter is
+  // null both before completion AND when no burn area was detected at all
+  // (a real, valid outcome) - only `status` distinguishes those two cases.
+  burn_perimeter: GeoJSON.FeatureCollection | null
+  building_damage: GeoJSON.FeatureCollection | null
+  error: string | null
 }
 
 export function getAcquisition(id: string): Promise<Acquisition> {

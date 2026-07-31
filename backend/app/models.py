@@ -35,7 +35,12 @@ class Fire(Base):
     # mode (median compositing), or exactly 1 each for Single-pair
     # fallback mode when a track can't support 3 - see
     # SAR_METHODOLOGY.md §8 for why there's no "2" tier in between.
-    acquisition_status: Mapped[str | None] = mapped_column(String)  # None | 'marked' | 'confirmed'
+    # None | 'marked' | 'confirmed' | 'processing' | 'complete' | 'failed' -
+    # 'confirmed' is transient (submit_job is called synchronously right
+    # after, in the same request) and should only ever be seen mid-request;
+    # the polling loop in main.py moves 'processing' to 'complete'/'failed'
+    # once batch.describe_jobs() reports a terminal status.
+    acquisition_status: Mapped[str | None] = mapped_column(String)
     # none_as_null=True is required here: SQLAlchemy's JSON/JSONB type
     # otherwise stores a Python None as the literal JSON `null` (a real,
     # non-SQL-NULL value) rather than SQL NULL - confirmed live this broke
@@ -44,6 +49,28 @@ class Fire(Base):
     acquisition_before_scenes: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
     acquisition_after_scenes: Mapped[list | None] = mapped_column(JSONB(none_as_null=True))
     acquisition_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # AWS Batch job ID for the in-flight/most-recent compute run - the
+    # polling loop's only handle back onto the job it's watching.
+    acquisition_batch_job_id: Mapped[str | None] = mapped_column(String)
+    # result_summary.json's contents, copied in once the polling loop sees
+    # SUCCEEDED - see sar-compute/entrypoint.py for exactly what's in it
+    # (includes the threshold/building-dataset honesty notes, not just
+    # numbers, so Phase E's UI can render them directly from here).
+    acquisition_result: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    # burn_perimeter.geojson / building_damage.geojson contents, copied in
+    # alongside acquisition_result - kept as separate columns (not nested
+    # inside acquisition_result) since they're map-overlay geometry, not
+    # summary numbers, mirroring how `perimeter`/`buildings` are already
+    # separate top-level columns on this same model. Both already
+    # reprojected to EPSG:4326 by the pipeline before upload, matching
+    # every other geometry column here - no S3 proxying or presigned URLs
+    # needed, the same pattern as acquisition_result. burn_perimeter is
+    # None when no burn area was detected at all (a real, valid outcome).
+    acquisition_burn_perimeter: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    acquisition_building_damage: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    # Populated on FAILED from the Batch job's own statusReason - shown to
+    # the operator rather than a generic "something went wrong".
+    acquisition_error: Mapped[str | None] = mapped_column(String)
 
 
 class BuildingCache(Base):

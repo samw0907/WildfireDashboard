@@ -54,6 +54,10 @@ export function FireDetail() {
     before: [],
     after: [],
   })
+  const [acquisitionResults, setAcquisitionResults] = useState<{
+    burnPerimeter: GeoJSON.FeatureCollection | null
+    buildingDamage: GeoJSON.FeatureCollection | null
+  }>({ burnPerimeter: null, buildingDamage: null })
 
   useEffect(() => {
     if (!id) return
@@ -108,7 +112,7 @@ export function FireDetail() {
         )}
       </div>
 
-      <AcquisitionPanel fireId={fire.id} onScenesChange={setAcquisitionScenes} />
+      <AcquisitionPanel fireId={fire.id} onScenesChange={setAcquisitionScenes} onResultsChange={setAcquisitionResults} />
 
       <div className="fire-detail-split">
         <div className="fire-detail-map">
@@ -121,6 +125,7 @@ export function FireDetail() {
               before: acquisitionScenes.before.map((s) => s.footprint).filter((f): f is GeoJSON.Geometry => f != null),
               after: acquisitionScenes.after.map((s) => s.footprint).filter((f): f is GeoJSON.Geometry => f != null),
             }}
+            sarResults={acquisitionResults}
           />
           {weather?.wind.direction_degrees != null && (
             <div
@@ -155,6 +160,28 @@ export function FireDetail() {
                 <span>
                   <span className="scene-legend-swatch scene-legend-swatch--after" /> After scene(s)
                 </span>
+              )}
+            </div>
+          )}
+          {(acquisitionResults.burnPerimeter || acquisitionResults.buildingDamage) && (
+            <div className="scene-legend">
+              {acquisitionResults.burnPerimeter && (
+                <span>
+                  <span className="scene-legend-swatch scene-legend-swatch--burn" /> SAR-detected burn area
+                </span>
+              )}
+              {acquisitionResults.buildingDamage && (
+                <>
+                  <span>
+                    <span className="damage-dot damage-dot--destroyed" /> Destroyed
+                  </span>
+                  <span>
+                    <span className="damage-dot damage-dot--possibly_affected" /> Possibly affected
+                  </span>
+                  <span>
+                    <span className="damage-dot damage-dot--no_damage" /> No damage
+                  </span>
+                </>
               )}
             </div>
           )}

@@ -13,6 +13,7 @@ from .routers.acquisition import router as acquisition_router
 from .routers.alerts import router as alerts_router
 from .routers.fires import router as fires_router
 from .routers.status import router as status_router
+from .sar_batch import run_sar_batch_poll_cycle
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,15 +60,31 @@ async def _alerts_loop() -> None:
         await asyncio.sleep(interval_seconds)
 
 
+async def _sar_batch_poll_loop() -> None:
+    # Fixed 2-minute cadence, not tied to the ingestion interval setting -
+    # Batch jobs run for hours, so this only needs to be "responsive
+    # enough for a human watching the UI", and the query is a no-op cost
+    # (single indexed SELECT) whenever nothing is in flight.
+    interval_seconds = 120
+    while True:
+        try:
+            await asyncio.to_thread(run_sar_batch_poll_cycle)
+        except Exception:
+            logger.exception("Unexpected error in SAR batch poll loop")
+        await asyncio.sleep(interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ingestion_task = asyncio.create_task(_ingestion_loop())
     exposure_task = asyncio.create_task(_exposure_loop())
     alerts_task = asyncio.create_task(_alerts_loop())
+    sar_batch_task = asyncio.create_task(_sar_batch_poll_loop())
     yield
     ingestion_task.cancel()
     exposure_task.cancel()
     alerts_task.cancel()
+    sar_batch_task.cancel()
 
 
 app = FastAPI(title="WildfireDashboard API", lifespan=lifespan)

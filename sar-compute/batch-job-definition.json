@@ -1,0 +1,41 @@
+{
+  "jobDefinitionName": "wildfiredashboard-sar-job",
+  "type": "container",
+  "platformCapabilities": ["FARGATE"],
+  "retryStrategy": { "attempts": 1 },
+  "timeout": { "attemptDurationSeconds": 21600 },
+  "containerProperties": {
+    "image": "497537671259.dkr.ecr.eu-north-1.amazonaws.com/wildfiredashboard-sar-compute:latest",
+    "resourceRequirements": [
+      { "type": "VCPU", "value": "4" },
+      { "type": "MEMORY", "value": "16384" }
+    ],
+    "executionRoleArn": "arn:aws:iam::497537671259:role/wildfiredashboard-sar-execution",
+    "jobRoleArn": "arn:aws:iam::497537671259:role/wildfiredashboard-sar-task",
+    "environment": [
+      { "name": "WILDFIRE_API_BASE_URL", "value": "https://wildfiredashboard-production.up.railway.app" },
+      { "name": "S3_BUCKET", "value": "wildfiredashboard-sar-results-497537671259" },
+      { "name": "AWS_DEFAULT_REGION", "value": "eu-north-1" }
+    ],
+    "secrets": [
+      {
+        "name": "CDSE_USER",
+        "valueFrom": "arn:aws:secretsmanager:eu-north-1:497537671259:secret:wildfiredashboard/sar/cdse-credentials-F3xPeG:username::"
+      },
+      {
+        "name": "CDSE_PASSWORD",
+        "valueFrom": "arn:aws:secretsmanager:eu-north-1:497537671259:secret:wildfiredashboard/sar/cdse-credentials-F3xPeG:password::"
+      }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/wildfiredashboard/sar-compute",
+        "awslogs-region": "eu-north-1",
+        "awslogs-stream-prefix": "sar-compute"
+      }
+    },
+    "networkConfiguration": { "assignPublicIp": "ENABLED" },
+    "fargatePlatformConfiguration": { "platformVersion": "LATEST" }
+  }
+}

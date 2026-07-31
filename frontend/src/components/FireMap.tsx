@@ -23,6 +23,13 @@ interface FireMapProps {
   // picking acquisition scenes. Outline only, not filled, since a full IW
   // swath is ~250km wide and would otherwise dominate the view.
   sceneFootprints?: { before?: GeoJSON.Geometry[]; after?: GeoJSON.Geometry[] }
+  // SAR compute results once a job completes - both already reprojected
+  // to EPSG:4326 by the pipeline. burnPerimeter is null both before
+  // completion and when no burn area was detected at all (a real outcome).
+  sarResults?: {
+    burnPerimeter?: GeoJSON.FeatureCollection | null
+    buildingDamage?: GeoJSON.FeatureCollection | null
+  }
 }
 
 const SOURCE_ID = 'fires'
@@ -41,6 +48,20 @@ const SCENE_AFTER_SOURCE_ID = 'scene-after'
 // kind of thing (satellite coverage, not fire risk).
 const SCENE_BEFORE_COLOR = '#2563eb'
 const SCENE_AFTER_COLOR = '#0891b2'
+const BURN_PERIMETER_SOURCE_ID = 'sar-burn-perimeter'
+// Dark maroon - deliberately distinct from the fire-perimeter/buffer warm
+// orange-yellow gradient and the blue/cyan scene-footprint outlines, so a
+// SAR-detected burn area reads as its own, more severe kind of thing.
+const BURN_PERIMETER_COLOR = '#7f1d1d'
+const BUILDING_DAMAGE_SOURCE_ID = 'sar-building-damage'
+// Matches buildings.py's classify_damage()/flag_geometry_limited() classes.
+const DAMAGE_CLASS_COLORS: Record<string, string> = {
+  destroyed: '#dc2626',
+  possibly_affected: '#f97316',
+  no_damage: '#16a34a',
+  no_data: '#9ca3af',
+  geometry_limited: '#6b7280',
+}
 
 // Outward heat gradient: the closest buffer is most urgent (red, matching
 // the perimeter's own red outline), fading to yellow at the widest band -
@@ -87,6 +108,7 @@ export function FireMap({
   buffers,
   enableAlerts,
   sceneFootprints,
+  sarResults,
 }: FireMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -155,6 +177,41 @@ export function FireMap({
         type: 'line',
         source: SCENE_AFTER_SOURCE_ID,
         paint: { 'line-color': SCENE_AFTER_COLOR, 'line-width': 2, 'line-dasharray': [4, 2] },
+      })
+
+      // SAR compute results - added above the buffer bands but below the
+      // fire perimeter itself, so a detected burn area/damaged buildings
+      // read as more prominent than the generic exposure rings.
+      map.addSource(BURN_PERIMETER_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: `${BURN_PERIMETER_SOURCE_ID}-fill`,
+        type: 'fill',
+        source: BURN_PERIMETER_SOURCE_ID,
+        paint: { 'fill-color': BURN_PERIMETER_COLOR, 'fill-opacity': 0.4 },
+      })
+      map.addLayer({
+        id: `${BURN_PERIMETER_SOURCE_ID}-line`,
+        type: 'line',
+        source: BURN_PERIMETER_SOURCE_ID,
+        paint: { 'line-color': BURN_PERIMETER_COLOR, 'line-width': 1.5 },
+      })
+      map.addSource(BUILDING_DAMAGE_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: `${BUILDING_DAMAGE_SOURCE_ID}-fill`,
+        type: 'fill',
+        source: BUILDING_DAMAGE_SOURCE_ID,
+        paint: {
+          'fill-color': [
+            'match',
+            ['get', 'damage_class'],
+            'destroyed', DAMAGE_CLASS_COLORS.destroyed,
+            'possibly_affected', DAMAGE_CLASS_COLORS.possibly_affected,
+            'no_damage', DAMAGE_CLASS_COLORS.no_damage,
+            'geometry_limited', DAMAGE_CLASS_COLORS.geometry_limited,
+            DAMAGE_CLASS_COLORS.no_data,
+          ],
+          'fill-opacity': 0.75,
+        },
       })
 
       for (const band of BUFFER_BAND_ORDER) {
@@ -281,6 +338,11 @@ export function FireMap({
       const afterSource = map.getSource(SCENE_AFTER_SOURCE_ID) as GeoJSONSource | undefined
       afterSource?.setData(toFeatureCollection(sceneFootprints?.after))
 
+      const burnSource = map.getSource(BURN_PERIMETER_SOURCE_ID) as GeoJSONSource | undefined
+      burnSource?.setData(sarResults?.burnPerimeter ?? { type: 'FeatureCollection', features: [] })
+      const damageSource = map.getSource(BUILDING_DAMAGE_SOURCE_ID) as GeoJSONSource | undefined
+      damageSource?.setData(sarResults?.buildingDamage ?? { type: 'FeatureCollection', features: [] })
+
       if (fitToSelection && selectedFireId) {
         const selected = fires.find((f) => f.id === selectedFireId)
         let coords = selected ? flattenCoords(selected.perimeter) : []
@@ -308,7 +370,7 @@ export function FireMap({
     } else {
       map.once('load', updateData)
     }
-  }, [fires, selectedFireId, fitToSelection, buffers, alerts, sceneFootprints])
+  }, [fires, selectedFireId, fitToSelection, buffers, alerts, sceneFootprints, sarResults])
 
   useEffect(() => {
     const map = mapRef.current

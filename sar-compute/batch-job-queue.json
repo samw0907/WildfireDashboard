@@ -1,0 +1,8 @@
+{
+  "jobQueueName": "wildfiredashboard-sar-queue",
+  "state": "ENABLED",
+  "priority": 1,
+  "computeEnvironmentOrder": [
+    { "order": 1, "computeEnvironment": "wildfiredashboard-sar-compute-env" }
+  ]
+}

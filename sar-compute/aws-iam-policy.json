@@ -1,0 +1,141 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "EcrAuth",
+      "Effect": "Allow",
+      "Action": "ecr:GetAuthorizationToken",
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrRepo",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:CreateRepository",
+        "ecr:DescribeRepositories",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage",
+        "ecr:TagResource"
+      ],
+      "Resource": "arn:aws:ecr:*:497537671259:repository/wildfiredashboard-sar-compute"
+    },
+    {
+      "Sid": "BatchSetup",
+      "Effect": "Allow",
+      "Action": [
+        "batch:CreateComputeEnvironment",
+        "batch:UpdateComputeEnvironment",
+        "batch:DeleteComputeEnvironment",
+        "batch:DescribeComputeEnvironments",
+        "batch:CreateJobQueue",
+        "batch:UpdateJobQueue",
+        "batch:DescribeJobQueues",
+        "batch:RegisterJobDefinition",
+        "batch:DeregisterJobDefinition",
+        "batch:DescribeJobDefinitions",
+        "batch:SubmitJob",
+        "batch:DescribeJobs",
+        "batch:ListJobs",
+        "batch:TerminateJob",
+        "batch:TagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IamRoleScoped",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:GetRole",
+        "iam:PutRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:TagRole"
+      ],
+      "Resource": "arn:aws:iam::497537671259:role/wildfiredashboard-sar-*"
+    },
+    {
+      "Sid": "PassRoleScopedToEcsTasks",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::497537671259:role/wildfiredashboard-sar-*",
+      "Condition": {
+        "StringEquals": { "iam:PassedToService": "ecs-tasks.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "VpcReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeVpcs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "LogsReadOnly",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BatchServiceLinkedRoleSetup",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:aws:iam::497537671259:role/aws-service-role/batch.amazonaws.com/AWSServiceRoleForBatch",
+      "Condition": {
+        "StringEquals": { "iam:AWSServiceName": "batch.amazonaws.com" }
+      }
+    },
+    {
+      "Sid": "SarLogGroupSetup",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource"
+      ],
+      "Resource": "arn:aws:logs:*:497537671259:log-group:/wildfiredashboard/sar-compute*"
+    },
+    {
+      "Sid": "SarSecretsSetup",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:TagResource"
+      ],
+      "Resource": "arn:aws:secretsmanager:*:497537671259:secret:wildfiredashboard/sar/*"
+    },
+    {
+      "Sid": "SarResultsBucketSetup",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration",
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::wildfiredashboard-sar-results-497537671259",
+        "arn:aws:s3:::wildfiredashboard-sar-results-497537671259/*"
+      ]
+    }
+  ]
+}

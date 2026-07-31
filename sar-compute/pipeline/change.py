@@ -106,6 +106,9 @@ def vectorise_mask(mask: np.ndarray, profile: dict) -> gpd.GeoDataFrame:
     if not polygons:
         return gpd.GeoDataFrame(columns=["geometry", "area_ha"], crs=crs)
     gdf = gpd.GeoDataFrame(geometry=polygons, crs=crs)
+    # area_ha must be computed in the projected (metric) CRS, before the
+    # to_crs(4326) reprojection callers apply for output - degrees aren't
+    # an area unit.
     gdf["area_ha"] = gdf.geometry.area / 10000
     return gdf
 
@@ -176,7 +179,10 @@ def run_change_detection(
 
     burn_path = os.path.join(output_dir, "burn_perimeter.geojson")
     if len(burn_gdf):
-        burn_gdf.to_file(burn_path, driver="GeoJSON")
+        # Written in WGS84, not the UTM working CRS - the frontend map
+        # (fire perimeters, OSM buildings) is entirely EPSG:4326, and this
+        # output is meant to overlay directly on it.
+        burn_gdf.to_crs(epsg=4326).to_file(burn_path, driver="GeoJSON")
 
     return {
         "change_combined_path": os.path.join(output_dir, "change_combined.tif"),

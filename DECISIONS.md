@@ -713,6 +713,112 @@ engineering decisions worth logging here:
   locations, and the real cached OSM building data's shape against what
   the code expects.
 
+## SAR compute Phase D — AWS infrastructure, live (2026-07-31)
+
+Everything designed in "SAR compute dispatch" above is now actually
+provisioned and verified healthy, not just planned. Real resource names/IDs
+(needed by anyone picking this up cold):
+
+- **ECR**: `wildfiredashboard-sar-compute` repo, `:latest` tag pushed.
+- **IAM roles**: `wildfiredashboard-sar-execution` (pulls the image, writes
+  CloudWatch logs, reads the CDSE secret via a scoped inline policy),
+  `wildfiredashboard-sar-task` (S3 read/write on the results bucket only).
+- **Batch**: compute environment `wildfiredashboard-sar-compute-env`
+  (Fargate, the account's 3 default public subnets, default security
+  group), job queue `wildfiredashboard-sar-queue`, job definition
+  `wildfiredashboard-sar-job` (4 vCPU / 16GB, `retryStrategy.attempts: 1` —
+  a stuck/broken run should surface as a clear failure, not silently
+  double-run and double the cost — 6h `attemptDurationSeconds` hard cap).
+- **S3**: `wildfiredashboard-sar-results-497537671259` (account-ID-suffixed
+  for guaranteed global-namespace uniqueness), public access blocked,
+  SSE-S3 encryption on by default.
+- **Secrets Manager**: `wildfiredashboard/sar/cdse-credentials`
+  (username/password key-value secret), created by the user directly
+  through the console — CDSE credentials never passed through this
+  session, matching the existing `.env`-handling boundary.
+- **IAM policy structure changed mid-setup**: the deployer's inline policy
+  hit AWS's hard 2048-non-whitespace-character limit for inline policies as
+  permissions accumulated (ECR, Batch, scoped IAM role management, Secrets
+  Manager, S3, CloudWatch Logs, the Batch service-linked-role grant). Fixed
+  by converting it to a standalone customer-managed policy
+  (`WildfireDashboardSarComputeInfrastructure`, 6144-char limit) rather
+  than trimming permissions — same access, different container. Anyone
+  extending this further should expect to hit the same wall again
+  eventually and know the fix is the same.
+- **New dedicated IAM user for the backend itself**:
+  `wildfiredashboard-backend-runtime`, scoped to only
+  `batch:SubmitJob`/`batch:DescribeJobs` (API doesn't support finer
+  resource scoping for these) + `s3:GetObject` on the results bucket's
+  `acquisitions/*` prefix. Needed because the backend runs on Railway, not
+  AWS — unlike the Fargate task, it has no IAM role for boto3's default
+  credential chain to pick up automatically, so it needs its own static
+  access key (stored in Railway's env vars, entered by the user directly,
+  never seen by this session). Deliberately a separate identity from both
+  `wildfiredashboard-deployer` (setup-time, broader/more sensitive) and
+  `wildfiredashboard-frontend-deploy` (a different purpose entirely) —
+  least-privilege means one identity per purpose, not one shared key.
+
+### Real bugs found only once actually building/wiring this (not
+### hypothetical — each blocked a real `docker build` or would have
+### silently broken at job-run time)
+- Ubuntu 24.04 ships Python 3.12 as `python3`; `python3.11` isn't a
+  package at all on this release — the Dockerfile (copied from
+  `LAwildfireSAR`, built on an older Ubuntu release's assumptions) needed
+  updating to the distro's native package name.
+- Ubuntu 24.04's system pip refuses unmanaged installs by default (PEP
+  668) — needs `--break-system-packages`. Safe here specifically because
+  this container has exactly one purpose and one pinned dependency set,
+  not a general dev environment where that override would be dangerous.
+- The inherited SNAP installer URL (version 10.0) 404s — ESA had already
+  moved the current release to 13.0.0 with a renamed installer file
+  (`_unix_10_0.sh` → `_linux-13.0.0.sh`). Fixed by pointing at the current
+  URL. **This is a genuine open methodological question, not just a build
+  fix**: the original pipeline's RTC output was validated using SNAP
+  10.0's GPT operators specifically; nothing guarantees a 3-major-version
+  jump produces bit-identical (or even equivalent-quality) RTC output.
+  Flagging this explicitly rather than assuming it's fine — worth a sanity
+  check against the first real job's output once one exists.
+- `gdal-bin` hard-depends on `python3-gdal` (not just a Recommends —
+  confirmed by testing `--no-install-recommends`, which didn't remove it),
+  and apt's own numpy install for that package conflicted with pip trying
+  to install the pinned `numpy==2.4.2` (pip can't uninstall a dpkg-managed
+  package — no RECORD file to work from). Fixed with `--ignore-installed`
+  rather than fighting the apt dependency tree.
+- GDAL's Python bindings compile C++ extensions, not just C — needed
+  `g++` in addition to `gcc` (needed for psycopg2). Neither was present in
+  the minimal base image; this only surfaces once you actually try to
+  build the wheel, not from reading the Dockerfile.
+- The job definition's Secrets Manager `valueFrom` ARN was missing the
+  random 6-character suffix AWS appends to every secret
+  (`...cdse-credentials` vs. the real `...cdse-credentials-F3xPeG`).
+  ECS/Batch's secret injection requires either the *exact* full ARN or the
+  bare secret name — a partial ARN silently fails to resolve at container
+  start. Caught by describing the real secret and diffing against the job
+  definition before ever submitting a job against it; fixed by
+  re-registering the job definition (now revision 2 — Batch keeps job
+  definition revisions automatically, so the backend's
+  `SAR_BATCH_JOB_DEFINITION=wildfiredashboard-sar-job` setting needed no
+  change, since submitting by name always resolves to the latest active
+  revision).
+
+### Reassessment: does the original plan still hold?
+Yes, with one caveat worth carrying forward rather than one that changes
+the plan. The architecture, resource shapes, and cost-safety guards
+(fixed timeout, no auto-retry, least-privilege everywhere) all match what
+was designed in "SAR compute dispatch" above — nothing about the actual
+provisioning forced a redesign, only build-environment fixes (Ubuntu
+24.04 package/pip specifics) and one AWS-account-quota workaround (inline
+→ managed policy), both mechanical, neither touching methodology. The one
+thing that *is* new information, not just implementation detail: the
+SNAP 10.0→13.0 version jump. It doesn't change anything about Phase E's
+design, but it does mean the "first real run" (next step) is now also the
+first check that RTC processing on the newer SNAP version behaves the way
+the original pipeline's validated methodology assumed. If that first run
+produces obviously wrong output (e.g. change-detection values wildly
+inconsistent with the fixed 2.9 dB threshold's expected behavior), that's
+the signal to actually dig into SNAP version differences rather than
+assume the pipeline logic itself is broken.
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands

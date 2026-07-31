@@ -476,23 +476,95 @@ loop scene picking instead.
         verified without that: Python syntax on every new file, the
         UTM-zone math against two independent real fire locations, and the
         real OSM building data's shape against what the code expects.
-  - [ ] **Phase D — AWS infrastructure**: ECR repo; Batch compute
-        environment (Fargate-backed) + job queue + job definition with a
-        hard timeout (~6h) as a cost-safety cap; IAM roles scoped to S3
-        read/write; extend `/confirm` to call `boto3` `submit_job` with
-        the chosen scene IDs + fire ID as container overrides; new
-        background polling loop (`asyncio`, matching the existing
-        ingestion/exposure/alerts pattern — no new AWS services like
-        EventBridge/Lambda) checking `batch.describe_jobs()` and updating
-        the DB on `SUCCEEDED`/`FAILED`.
-  - [ ] **Phase E — results display**: new acquisition status states
-        (processing → complete/failed) with S3 result location stored;
-        new Fire Detail UI section for the output (damage summary/map
-        overlay); UI copy must visibly label which mode ran ("Composite
-        (3+3)" vs. "Single-pair (1+1) — reduced reliability") and frame
-        accuracy honestly per `SAR_METHODOLOGY.md` (not "F1 0.80
-        validated" — that number doesn't transfer to a new fire, new
-        building dataset, or uncalibrated threshold).
+  - [x] **Phase D — AWS infrastructure** (2026-07-31, live and verified):
+        ECR repo (`wildfiredashboard-sar-compute`) built and pushed; two
+        IAM roles (`wildfiredashboard-sar-execution` — pull image + write
+        logs + read the CDSE secret; `wildfiredashboard-sar-task` — S3
+        read/write on the results bucket only); Batch compute environment
+        (`wildfiredashboard-sar-compute-env`, Fargate, 3 public subnets)
+        + job queue (`wildfiredashboard-sar-queue`) + job definition
+        (`wildfiredashboard-sar-job`, 4 vCPU/16GB, 1 retry attempt, 6h
+        hard timeout as a cost-safety cap); S3 results bucket
+        (`wildfiredashboard-sar-results-497537671259`, public access
+        blocked, SSE-S3 encrypted); CloudWatch log group
+        (`/wildfiredashboard/sar-compute`, 30-day retention); CDSE
+        credentials in a Secrets Manager secret
+        (`wildfiredashboard/sar/cdse-credentials`), injected into the
+        container via the job definition's `secrets` field (never a
+        plaintext env var); `/confirm` now calls `batch.submit_job()`
+        synchronously and surfaces failures immediately (502) instead of
+        silently sitting in `'confirmed'`; new `sar_batch.py` polling loop
+        (same `asyncio` pattern as ingestion/exposure/alerts, 2-minute
+        cadence) checks `describe_jobs()` and moves fires to
+        `'complete'`/`'failed'`, pulling `result_summary.json` from S3 on
+        success. All infrastructure confirmed healthy live (compute env +
+        job queue both `VALID`/`ENABLED`, job definition ACTIVE).
+
+        **Real bugs hit and fixed along the way** (all in
+        `sar-compute/Dockerfile`, none previously testable without an
+        actual build):
+        - `python3.11` doesn't exist on Ubuntu 24.04 (ships 3.12 as
+          `python3`) — switched to the distro's native package.
+        - Ubuntu 24.04's system pip refuses unmanaged installs (PEP 668)
+          — added `--break-system-packages` (safe here; single-purpose
+          container, not a dev environment).
+        - The SNAP installer URL inherited from `LAwildfireSAR` (10.0)
+          404s — ESA had moved on to 13.0.0 with a renamed installer
+          path. **Open item**: the original pipeline's RTC processing was
+          only validated against SNAP 10.0's GPT operators; the version
+          jump hasn't been independently re-verified to behave
+          identically — worth a sanity check on the first real output.
+        - `gdal-bin` hard-depends on `python3-gdal`, which apt installs
+          its own numpy for for; pip couldn't uninstall it (no RECORD
+          file) when resolving the pinned `numpy==2.4.2` — fixed with
+          `--ignore-installed`.
+        - GDAL's Python bindings are C++, not C — needed `g++` (and
+          `gcc` for psycopg2), neither present in a minimal base image.
+        - Job definition's Secrets Manager `valueFrom` initially omitted
+          the random 6-character suffix AWS appends to every secret ARN
+          — ECS/Batch's secret resolution requires either the *exact*
+          full ARN or the bare secret name, not a partial one. Caught
+          before any job ran, by describe-secret-ing the real ARN and
+          diffing against what the job definition had; fixed by
+          re-registering the job definition (revision 2).
+        - The deployer's inline IAM policy hit AWS's hard 2048-character
+          limit as it grew — converted to a standalone customer-managed
+          policy (6144-char limit) instead, same permissions.
+  - [x] **Phase E — results display** (2026-07-31, built, not yet tested
+        against a real result): two new columns
+        (`acquisition_burn_perimeter`, `acquisition_building_damage`)
+        store `burn_perimeter.geojson`/`building_damage.geojson` verbatim,
+        fetched by the same polling loop that already pulls
+        `result_summary.json` on `SUCCEEDED` - no presigned URLs or S3
+        proxy endpoint needed, matching the existing pattern.
+        **Real bug caught before any real job ran**: both files were
+        being written in the per-fire UTM CRS (the RTC processing working
+        projection), not EPSG:4326 like every other geometry on this map
+        (fire perimeters, OSM buildings) - fixed in `change.py`/
+        `buildings.py` to reproject to WGS84 right before writing, and
+        the already-pushed image was rebuilt and repushed with the fix
+        (cache made this near-instant - only the `pipeline/` COPY layer
+        needed to redo). `AcquisitionPanel.tsx` now renders per-status:
+        marked (unchanged) → processing (spinner, auto-polls every 2
+        minutes to match the backend's own cadence, so the tab doesn't
+        need to stay open or be manually refreshed) → complete (burn
+        area/patch count/buildings-assessed stat cards, a damage-class
+        breakdown table, and the threshold/building-dataset honesty notes
+        rendered verbatim from `result_summary.json`, not re-worded) →
+        failed (error message + Retry button that resubmits via the same
+        `/confirm` endpoint). `FireMap.tsx` gained two new overlay layers
+        (burn perimeter fill, building-damage fill colored by
+        `damage_class` - destroyed/possibly_affected/no_damage/no_data/
+        geometry_limited each get a distinct color) with a legend
+        alongside the existing scene-footprint one. Frontend build and
+        backend imports both verified clean.
+  - [ ] **Not yet done**: a real end-to-end test (confirm an actual fire,
+        watch the job run to completion, verify a result lands and
+        displays correctly). Every piece has been verified independently
+        (image builds, roles resolve, resources are healthy, frontend
+        builds clean) but the full chain hasn't been exercised together
+        yet — this is the next concrete step, and the first real chance
+        to sanity-check the SNAP 10.0→13.0 jump noted above.
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of

@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     # through the UI.
     admin_access_key: str | None = None
 
+    # --- SAR compute dispatch (AWS Batch on Fargate - see DECISIONS.md
+    # "SAR compute dispatch") ---
+    aws_region: str = "eu-north-1"
+    sar_results_bucket: str = "wildfiredashboard-sar-results-497537671259"
+    sar_batch_job_queue: str | None = None
+    sar_batch_job_definition: str | None = None
+    # This backend's own public URL - passed into the Batch container so
+    # entrypoint.py can call back into the same public API the frontend
+    # uses (fire + acquisition data), rather than needing direct DB access.
+    wildfire_api_base_url: str | None = None
+
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore")
 
     @property

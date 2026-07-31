@@ -1104,6 +1104,108 @@
   font-size: 13px;
 }
 
+.acquisition-processing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent-orange);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.acquisition-failed {
+  margin-bottom: 8px;
+}
+
+.acquisition-failed p {
+  color: var(--accent-red);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.acquisition-results {
+  margin-bottom: 8px;
+}
+
+.acquisition-results h4 {
+  margin-bottom: 10px;
+}
+
+.acquisition-results .stat-row {
+  margin-bottom: 12px;
+}
+
+.damage-table {
+  width: 100%;
+  font-size: 13px;
+  margin-bottom: 12px;
+  border-collapse: collapse;
+}
+
+.damage-table td {
+  padding: 4px 0;
+}
+
+.damage-table td:last-child {
+  text-align: right;
+  font-weight: 600;
+}
+
+.damage-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.damage-dot--destroyed {
+  background: #dc2626;
+}
+
+.damage-dot--possibly_affected {
+  background: #f97316;
+}
+
+.damage-dot--no_damage {
+  background: #16a34a;
+}
+
+.damage-dot--no_data {
+  background: #9ca3af;
+}
+
+.damage-dot--geometry_limited {
+  background: #6b7280;
+}
+
+.acquisition-honesty-note {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.scene-legend-swatch--burn {
+  background: #7f1d1d;
+}
+
 .forecast-section {
   margin-top: 16px;
 }

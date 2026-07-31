@@ -136,5 +136,8 @@ def run_buildings(
     logger.info("Damage classification counts:\n%s", buildings_gdf["damage_class"].value_counts().to_string())
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    buildings_gdf.to_file(output_path, driver="GeoJSON")
+    # Written in WGS84, not target_crs (the UTM working CRS) - the
+    # frontend map is entirely EPSG:4326, and this output is meant to
+    # overlay directly on it alongside the fire's existing OSM buildings.
+    buildings_gdf.to_crs(epsg=4326).to_file(output_path, driver="GeoJSON")
     return buildings_gdf
