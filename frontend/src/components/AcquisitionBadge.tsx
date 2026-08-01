@@ -16,7 +16,7 @@ export function AcquisitionBadge({ compact = false }: { compact?: boolean }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {compact ? '🛰 SAR' : '🛰 SAR acquisition requested'}
+      {compact ? '🛰 SAR AQ' : '🛰 SAR acquisition requested'}
       {hovered && <TooltipBubble anchorRef={ref} text={ACQUISITION_TOOLTIP_TEXT} />}
     </span>
   )

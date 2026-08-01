@@ -159,3 +159,13 @@ export function TrashIcon() {
     </svg>
   )
 }
+
+export function LayersIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 3 2 8l10 5 10-5-10-5Z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2 16l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}

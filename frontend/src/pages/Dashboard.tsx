@@ -34,58 +34,78 @@ export function Dashboard() {
       </div>
     )
   }
-  if (!fires) return <PageLoading label="Loading fires…" />
 
-  const totalAcres = fires.reduce((sum, f) => sum + (f.acres ?? 0), 0)
-  const buildingsImpacted = sumBand(fires, 0, 'building_count')
-  const buildingsUnderThreat = sumBand(fires, 2400, 'building_count')
-  const populationImpacted = sumBand(fires, 0, 'population_est')
-  const populationUnderThreat = sumBand(fires, 2400, 'population_est')
-  const firesWithPopulation = fires.filter((f) => exposureAtBand(f.exposure, 2400)?.population_est != null).length
+  const totalAcres = fires ? fires.reduce((sum, f) => sum + (f.acres ?? 0), 0) : 0
+  const buildingsImpacted = fires ? sumBand(fires, 0, 'building_count') : 0
+  const buildingsUnderThreat = fires ? sumBand(fires, 2400, 'building_count') : 0
+  const populationImpacted = fires ? sumBand(fires, 0, 'population_est') : 0
+  const populationUnderThreat = fires ? sumBand(fires, 2400, 'population_est') : 0
+  const firesWithPopulation = fires
+    ? fires.filter((f) => exposureAtBand(f.exposure, 2400)?.population_est != null).length
+    : 0
 
   return (
     <div className="dashboard">
       <h1>Dashboard</h1>
       <p className="page-subtitle">Current US wildfire perimeters, sourced from NIFC WFIGS</p>
 
-      <div className="stat-row">
-        <StatCard label="Active fires tracked" value={fires.length} icon={FlameIcon} />
-        <StatCard
-          label="Total acres"
-          value={Math.round(totalAcres).toLocaleString()}
-          accent="orange"
-          icon={AreaIcon}
-        />
-        <ImpactStatCard
-          label="Buildings"
-          icon={BuildingIcon}
-          accent="red"
-          impacted={buildingsImpacted.toLocaleString()}
-          underThreat={buildingsUnderThreat.toLocaleString()}
-        />
-        <ImpactStatCard
-          label="Population"
-          icon={PeopleIcon}
-          accent="red"
-          impacted={Math.round(populationImpacted).toLocaleString()}
-          underThreat={Math.round(populationUnderThreat).toLocaleString()}
-        />
-      </div>
-      {firesWithPopulation < fires.length && (
-        <p className="exposure-note">
-          Population totals still filling in ({firesWithPopulation} of {fires.length} fires processed).
-        </p>
+      {fires && (
+        <>
+          <div className="stat-row">
+            <StatCard label="Active fires tracked" value={fires.length} icon={FlameIcon} />
+            <StatCard
+              label="Total acres"
+              value={Math.round(totalAcres).toLocaleString()}
+              accent="orange"
+              icon={AreaIcon}
+            />
+            <ImpactStatCard
+              label="Buildings"
+              icon={BuildingIcon}
+              accent="red"
+              impacted={buildingsImpacted.toLocaleString()}
+              underThreat={buildingsUnderThreat.toLocaleString()}
+            />
+            <ImpactStatCard
+              label="Population"
+              icon={PeopleIcon}
+              accent="red"
+              impacted={Math.round(populationImpacted).toLocaleString()}
+              underThreat={Math.round(populationUnderThreat).toLocaleString()}
+            />
+          </div>
+          {firesWithPopulation < fires.length && (
+            <p className="exposure-note">
+              Population totals still filling in ({firesWithPopulation} of {fires.length} fires processed).
+            </p>
+          )}
+        </>
       )}
 
       <div className="dashboard-map-full">
-        <FireMap fires={fires} onSelectFire={(id) => navigate(`/fires/${id}`)} enableAlerts />
+        {/* Mounted immediately regardless of whether `fires` has loaded yet
+            (matches MapPage) - the map's own alerts fetch is independent of
+            fire-perimeter data, so it shouldn't be needlessly delayed behind
+            the (sometimes slow) fires list just because this page also shows
+            a table below that genuinely does need it. Previously this whole
+            page - map included - waited behind a single `if (!fires) return
+            <PageLoading />`, which is exactly why Red Flag Warnings loaded
+            immediately on the standalone Map page but lagged/appeared "not
+            working" here. */}
+        <FireMap fires={fires ?? []} onSelectFire={(id) => navigate(`/fires/${id}`)} enableAlerts />
       </div>
 
-      <FireFilters fires={fires} filters={filters} onChange={setFilters} />
-      <p className="filter-result-count">
-        Showing {filteredFires.length} of {fires.length} fires
-      </p>
-      <FireTable fires={filteredFires} onSelectFire={(id) => navigate(`/fires/${id}`)} />
+      {fires ? (
+        <>
+          <FireFilters fires={fires} filters={filters} onChange={setFilters} />
+          <p className="filter-result-count">
+            Showing {filteredFires.length} of {fires.length} fires
+          </p>
+          <FireTable fires={filteredFires} onSelectFire={(id) => navigate(`/fires/${id}`)} />
+        </>
+      ) : (
+        <PageLoading label="Loading fires…" />
+      )}
     </div>
   )
 }

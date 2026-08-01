@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   acquisitionDownloadAllUrl,
   acquisitionDownloadUrl,
@@ -16,21 +17,31 @@ import {
   type Scene,
 } from '../api'
 import { StatCard } from './StatCard'
-import { AreaIcon, BuildingIcon, FlameIcon, TrashIcon } from './icons'
+import { BuildingIcon, TrashIcon } from './icons'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Lightbox } from './Lightbox'
 
-// Friendly labels for buildings.py's classify_damage()/flag_geometry_limited()
-// classes - order matters here (most-to-least severe), the summary table
-// below renders in this order regardless of the object-key order the API
-// returns building_damage_counts in.
-const DAMAGE_CLASS_LABELS: [string, string][] = [
-  ['destroyed', 'Destroyed'],
-  ['possibly_affected', 'Possibly affected'],
-  ['no_damage', 'No damage detected'],
-  ['geometry_limited', 'Geometry-limited (unreliable)'],
-  ['no_data', 'No data'],
-]
+// Only counts with usable classification data go in the denominator - a
+// building with no_data/geometry_limited couldn't be assessed at all, so
+// including it would understate the real destroyed/affected percentages
+// among buildings that actually got a real answer.
+function damagePercent(count: number, usableTotal: number): number | null {
+  return usableTotal > 0 ? Math.round((count / usableTotal) * 100) : null
+}
+
+const ACRES_TO_HECTARES = 0.404686
+
+// SAR-detected burn area as a % of the fire's officially reported acreage
+// - a cheap, already-available cross-check: well under 100% suggests SAR
+// only picked up part of the burn (or the fire is still growing past what
+// was mapped at the time of the "after" scene), while well over 100%
+// suggests the fixed threshold picked up some non-fire change too.
+function burnAreaPercentOfFire(burnAreaHa: number, fireAcres: number | null | undefined): number | null {
+  if (!fireAcres || fireAcres <= 0) return null
+  const fireAreaHa = fireAcres * ACRES_TO_HECTARES
+  return Math.round((burnAreaHa / fireAreaHa) * 100)
+}
+
 
 // Composite mode (3+3) needs at least 3 dates per side for median
 // compositing to provide real outlier-robustness - median of 2 is
@@ -201,6 +212,12 @@ function acquisitionDateRange(a: Acquisition): string | null {
 
 interface AcquisitionPanelProps {
   fireId: string
+  // NIFC-reported fire acreage, if known - used only to contextualize the
+  // SAR-detected burn area as a % of the officially reported perimeter
+  // size (a cheap, already-available cross-check: does the SAR change
+  // signal cover most of the fire, a small fraction, or - if well over
+  // 100% - a sign the fixed threshold picked up non-fire change too).
+  fireAcres?: number | null
   // Reports whichever before/after scenes are currently relevant (mid-
   // selection, or already saved) for the acquisition tab currently being
   // viewed, so the parent can draw their real footprints on the map for
@@ -220,7 +237,13 @@ interface AcquisitionPanelProps {
   onConfirmedChange?: (confirmed: boolean) => void
 }
 
-export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onConfirmedChange }: AcquisitionPanelProps) {
+export function AcquisitionPanel({
+  fireId,
+  fireAcres,
+  onScenesChange,
+  onResultsChange,
+  onConfirmedChange,
+}: AcquisitionPanelProps) {
   const [acquisitions, setAcquisitions] = useState<Acquisition[]>([])
   const [activeSequence, setActiveSequence] = useState<number | null>(null)
   const [candidates, setCandidates] = useState<AcquisitionCandidates | null>(null)
@@ -656,68 +679,85 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onCo
 
           {activeAcquisition.status === 'complete' && activeAcquisition.result && (
             <div className="acquisition-results">
-              <h4>SAR Damage Assessment</h4>
-              <div className="stat-row">
-                <StatCard
-                  label="Burn area detected"
-                  value={activeAcquisition.result.total_burn_area_ha.toFixed(1)}
-                  unit=" ha"
-                  accent="red"
-                  icon={FlameIcon}
-                />
-                <StatCard
-                  label="Burn patches"
-                  value={activeAcquisition.result.burn_patch_count}
-                  accent="orange"
-                  icon={AreaIcon}
-                />
-                <StatCard
-                  label="Buildings assessed"
-                  value={activeAcquisition.result.total_buildings_classified}
-                  accent="green"
-                  icon={BuildingIcon}
-                />
-              </div>
-              <table className="damage-table">
-                <tbody>
-                  {DAMAGE_CLASS_LABELS.filter(([key]) => activeAcquisition.result!.building_damage_counts[key] != null).map(
-                    ([key, label]) => (
-                      <tr key={key}>
-                        <td>
-                          <span className={`damage-dot damage-dot--${key}`} />
-                          {label}
-                        </td>
-                        <td>{activeAcquisition.result!.building_damage_counts[key]}</td>
-                      </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
-              <p className="acquisition-honesty-note">
-                <strong>Damage threshold: {activeAcquisition.result.threshold_db} dB</strong> combined
-                dual-polarization change magnitude. {activeAcquisition.result.threshold_note}
-              </p>
-              <p className="acquisition-honesty-note">{activeAcquisition.result.building_dataset_note}</p>
-
-              {/* `files` is missing (not just empty) on results persisted before this
-                  manifest field existed in entrypoint.py - fall back to {} rather than
-                  crashing on older completed runs. */}
               {(() => {
-                const files = activeAcquisition.result!.files ?? {}
+                const result = activeAcquisition.result!
+                const counts = result.building_damage_counts
+                const destroyed = counts.destroyed ?? 0
+                const possiblyAffected = counts.possibly_affected ?? 0
+                const noDamage = counts.no_damage ?? 0
+                const noData = counts.no_data ?? 0
+                const geometryLimited = counts.geometry_limited ?? 0
+                // Denominator for percentages - only buildings that actually
+                // got a real classification, not ones excluded for lacking
+                // data or reliable geometry.
+                const usableTotal = destroyed + possiblyAffected + noDamage
+                const excluded = noData + geometryLimited
+                const files = result.files ?? {}
                 const sequence = activeAcquisition.sequence
+                const imageEntries = INLINE_FIGURE_LABELS.filter(({ key }) => files[key])
+                const dataEntries = Object.entries(files).filter(
+                  ([label]) => !INLINE_FIGURE_LABELS.some((f) => f.key === label),
+                )
+
                 return (
                   <>
-                    {INLINE_FIGURE_LABELS.some(({ key }) => files[key]) && (
-                      <div className="figure-gallery">
-                        {INLINE_FIGURE_LABELS.filter(({ key }) => files[key]).map(({ key, title }) => {
+                    {/* This is the core finding - what actually happened to buildings
+                        near the fire - so it leads, prominent, ahead of the raw burn-area
+                        geometry stats (which are real but a step removed from the
+                        "was my building destroyed" question people actually come here for). */}
+                    <h4>Building Damage Assessment</h4>
+                    <div className="stat-row">
+                      <StatCard
+                        label="Destroyed"
+                        value={destroyed}
+                        unit={damagePercent(destroyed, usableTotal) != null ? ` (${damagePercent(destroyed, usableTotal)}%)` : ''}
+                        accent="red"
+                        icon={BuildingIcon}
+                      />
+                      <StatCard
+                        label="Possibly affected"
+                        value={possiblyAffected}
+                        unit={
+                          damagePercent(possiblyAffected, usableTotal) != null
+                            ? ` (${damagePercent(possiblyAffected, usableTotal)}%)`
+                            : ''
+                        }
+                        accent="orange"
+                        icon={BuildingIcon}
+                      />
+                      <StatCard
+                        label="No damage detected"
+                        value={noDamage}
+                        unit={damagePercent(noDamage, usableTotal) != null ? ` (${damagePercent(noDamage, usableTotal)}%)` : ''}
+                        accent="green"
+                        icon={BuildingIcon}
+                      />
+                    </div>
+                    <p className="acquisition-minor-stats">
+                      {result.total_burn_area_ha.toFixed(1)} ha burn area detected
+                      {burnAreaPercentOfFire(result.total_burn_area_ha, fireAcres) != null &&
+                        ` (${burnAreaPercentOfFire(result.total_burn_area_ha, fireAcres)}% of reported fire acreage)`}{' '}
+                      across {result.burn_patch_count} patches · {result.total_buildings_classified} buildings
+                      assessed
+                      {excluded > 0 && ` · ${excluded} excluded (no data / geometry-limited)`}
+                    </p>
+                    <p className="acquisition-honesty-note">
+                      Fixed {result.threshold_db} dB change threshold, OpenStreetMap building data - both have real
+                      limitations for a live response.{' '}
+                      <Link to="/reference#sar-methodology">Full methodology →</Link>
+                    </p>
+
+                    {imageEntries.length > 0 && (
+                      <div className="figure-stack">
+                        {imageEntries.map(({ key, title }) => {
                           const src = acquisitionDownloadUrl(fireId, sequence, files[key])
                           return (
-                            <figure key={key} className="figure-item">
+                            <figure key={key} className="figure-stack-item">
                               <img
                                 src={src}
                                 alt={title}
                                 loading="lazy"
-                                className="figure-item-img"
+                                className="figure-stack-img"
                                 onClick={() => setLightbox({ src, alt: title })}
                               />
                               <figcaption>{title}</figcaption>
@@ -729,22 +769,41 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onCo
 
                     {Object.keys(files).length > 0 && (
                       <div className="acquisition-downloads">
-                        <div className="acquisition-downloads-header">
-                          <h5>Download results</h5>
-                          <a className="download-all-link" href={acquisitionDownloadAllUrl(fireId, sequence)} download>
-                            Download all (.zip)
-                          </a>
+                        <a className="download-all-btn" href={acquisitionDownloadAllUrl(fireId, sequence)} download>
+                          ⬇ Download all results (.zip)
+                        </a>
+                        <div className="acquisition-downloads-columns">
+                          {imageEntries.length > 0 && (
+                            <div className="acquisition-downloads-col">
+                              <h5>Figures</h5>
+                              <ul>
+                                {imageEntries.map(({ key, title }) => (
+                                  <li key={key}>
+                                    <a href={acquisitionDownloadUrl(fireId, sequence, files[key])} download>
+                                      {title}
+                                    </a>{' '}
+                                    <span className="download-filename">({files[key]})</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {dataEntries.length > 0 && (
+                            <div className="acquisition-downloads-col">
+                              <h5>Data files</h5>
+                              <ul>
+                                {dataEntries.map(([label, filename]) => (
+                                  <li key={label}>
+                                    <a href={acquisitionDownloadUrl(fireId, sequence, filename)} download>
+                                      {label.replace(/_/g, ' ')}
+                                    </a>{' '}
+                                    <span className="download-filename">({filename})</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                         </div>
-                        <ul>
-                          {Object.entries(files).map(([label, filename]) => (
-                            <li key={label}>
-                              <a href={acquisitionDownloadUrl(fireId, sequence, filename)} download>
-                                {label.replace(/_/g, ' ')}
-                              </a>{' '}
-                              <span className="download-filename">({filename})</span>
-                            </li>
-                          ))}
-                        </ul>
                       </div>
                     )}
 

@@ -3,6 +3,7 @@ import { MapLibreMap, Popup } from 'maplibre-gl'
 import type { GeoJSONSource, MapLayerMouseEvent } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { exposureAtBand, getFireAlerts, type Fire } from '../api'
+import { LayersIcon } from './icons'
 
 interface FireMapProps {
   fires: Fire[]
@@ -149,6 +150,21 @@ export function FireMap({
   // transition, so a later manual re-toggle by the user isn't immediately
   // fought by this effect running again on some unrelated re-render.
   const wasScenesConfirmedRef = useRef(false)
+  // Consolidated "Layers" dropdown - up to 3 independent toggles (alerts,
+  // buildings, scene footprints) used to each render as their own stacked
+  // checkbox in the top-right corner, which ate a lot of map space once a
+  // Fire Detail page had all three at once. One button + a panel instead.
+  const [layersPanelOpen, setLayersPanelOpen] = useState(false)
+  const layersPanelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!layersPanelOpen) return
+    function handleOutsideClick(e: MouseEvent) {
+      if (layersPanelRef.current && !layersPanelRef.current.contains(e.target as Node)) setLayersPanelOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [layersPanelOpen])
 
   useEffect(() => {
     if (!enableAlerts) return
@@ -495,40 +511,68 @@ export function FireMap({
     wasScenesConfirmedRef.current = !!scenesConfirmed
   }, [scenesConfirmed])
 
+  const hasAlertsToggle = !!(enableAlerts && alerts && alerts.features.length > 0)
+  const hasBuildingsToggle = !!(buildings && buildings.features.length > 0)
+  const hasSceneFootprintsToggle = (sceneFootprints?.before?.length ?? 0) > 0 || (sceneFootprints?.after?.length ?? 0) > 0
+  const hasAnyLayerToggle = hasAlertsToggle || hasBuildingsToggle || hasSceneFootprintsToggle
+
   return (
     <div className="fire-map-container">
       <div ref={containerRef} className="fire-map" />
-      {enableAlerts && alerts && alerts.features.length > 0 && (
-        <label
-          className="alerts-toggle"
-          title="Issued by local NWS offices when wind, humidity, and dryness combine to create critical fire weather - not tied to fire counts or size, so coverage can be a tight regional cluster on one day and nationwide the next."
-        >
-          <input type="checkbox" checked={alertsVisible} onChange={(e) => setAlertsVisible(e.target.checked)} />
-          Red Flag Warnings ({alerts.features.length})
-        </label>
-      )}
-      {buildings && buildings.features.length > 0 && (
-        <label className="buildings-toggle" title="Real OSM building footprints within this fire's exposure buffer.">
-          <input
-            type="checkbox"
-            checked={buildingsVisible}
-            onChange={(e) => setBuildingsVisible(e.target.checked)}
-          />
-          Buildings ({buildings.features.length})
-        </label>
-      )}
-      {((sceneFootprints?.before?.length ?? 0) > 0 || (sceneFootprints?.after?.length ?? 0) > 0) && (
-        <label
-          className="scene-footprints-toggle"
-          title="Real Sentinel-1 scene footprints used for this acquisition. Hidden by default once scenes are confirmed, since they matter most during scene selection - toggle back on any time to see coverage again."
-        >
-          <input
-            type="checkbox"
-            checked={sceneFootprintsVisible}
-            onChange={(e) => setSceneFootprintsVisible(e.target.checked)}
-          />
-          Scene footprints
-        </label>
+      {hasAnyLayerToggle && (
+        <div ref={layersPanelRef} className="map-layers-control">
+          <button
+            className="map-layers-btn"
+            onClick={() => setLayersPanelOpen((o) => !o)}
+            title="Toggle map layers"
+          >
+            <LayersIcon />
+            Layers
+          </button>
+          {layersPanelOpen && (
+            <div className="map-layers-panel">
+              {hasAlertsToggle && (
+                <label
+                  className="map-layers-option"
+                  title="Issued by local NWS offices when wind, humidity, and dryness combine to create critical fire weather - not tied to fire counts or size, so coverage can be a tight regional cluster on one day and nationwide the next."
+                >
+                  <input
+                    type="checkbox"
+                    checked={alertsVisible}
+                    onChange={(e) => setAlertsVisible(e.target.checked)}
+                  />
+                  Red Flag Warnings ({alerts!.features.length})
+                </label>
+              )}
+              {hasBuildingsToggle && (
+                <label
+                  className="map-layers-option"
+                  title="Real OSM building footprints within this fire's exposure buffer."
+                >
+                  <input
+                    type="checkbox"
+                    checked={buildingsVisible}
+                    onChange={(e) => setBuildingsVisible(e.target.checked)}
+                  />
+                  Buildings ({buildings!.features.length})
+                </label>
+              )}
+              {hasSceneFootprintsToggle && (
+                <label
+                  className="map-layers-option"
+                  title="Real Sentinel-1 scene footprints used for this acquisition. Hidden by default once scenes are confirmed, since they matter most during scene selection - toggle back on any time to see coverage again."
+                >
+                  <input
+                    type="checkbox"
+                    checked={sceneFootprintsVisible}
+                    onChange={(e) => setSceneFootprintsVisible(e.target.checked)}
+                  />
+                  Scene footprints
+                </label>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )

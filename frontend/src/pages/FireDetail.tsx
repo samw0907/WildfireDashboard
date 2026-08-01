@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWeather, type Scene } from '../api'
-import { StatCard } from '../components/StatCard'
 import { FireMap } from '../components/FireMap'
 import { AcquisitionPanel } from '../components/AcquisitionPanel'
 import { PageLoading } from '../components/PageLoading'
@@ -33,6 +32,22 @@ function forecastIcon(shortForecast: string) {
   if (text.includes('cloud') || text.includes('overcast')) return CloudIcon
   if (text.includes('sunny') || text.includes('clear')) return SunIcon
   return CloudIcon
+}
+
+// Icons themselves stay currentColor (SunIcon is reused as-is for the
+// unrelated light/dark theme toggle in Layout.tsx, so color can't be
+// baked into the icon component itself) - applied here instead via a
+// wrapping element's `color`, just for the forecast column's own context.
+function forecastIconColor(shortForecast: string): string {
+  const text = shortForecast.toLowerCase()
+  if (text.includes('thunder')) return '#a855f7'
+  if (text.includes('snow') || text.includes('sleet') || text.includes('ice')) return '#7dd3fc'
+  if (text.includes('rain') || text.includes('shower') || text.includes('drizzle')) return '#38bdf8'
+  if (text.includes('smoke') || text.includes('haze') || text.includes('fog')) return '#9ca3af'
+  if (text.includes('wind') || text.includes('breezy')) return '#2dd4bf'
+  if (text.includes('cloud') || text.includes('overcast')) return '#94a3b8'
+  if (text.includes('sunny') || text.includes('clear')) return '#fbbf24'
+  return '#94a3b8'
 }
 
 // Matches the ring colors drawn on the map (see FireMap.tsx) - 0m (the
@@ -195,24 +210,29 @@ export function FireDetail() {
             <div className="forecast-list">
               {weather.periods.map((p) => {
                 const Icon = forecastIcon(p.short_forecast ?? '')
+                const iconColor = forecastIconColor(p.short_forecast ?? '')
                 return (
                   <div key={p.start_time} className="forecast-list-item" title={p.short_forecast ?? undefined}>
                     <div className="forecast-list-name">{p.name}</div>
-                    <div className="forecast-list-main">
-                      <Icon />
-                      {p.temperature != null && (
-                        <span className="forecast-list-temp">
-                          {p.temperature}&deg;{p.temperature_unit}
+                    <div className="forecast-list-body">
+                      <div className="forecast-list-main">
+                        <span className="forecast-list-icon" style={{ color: iconColor }}>
+                          <Icon />
                         </span>
-                      )}
-                    </div>
-                    <div className="forecast-list-details">
-                      {p.wind_speed && (
-                        <span>
-                          {p.wind_direction} {p.wind_speed}
-                        </span>
-                      )}
-                      {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
+                        {p.temperature != null && (
+                          <span className="forecast-list-temp">
+                            {p.temperature}&deg;{p.temperature_unit}
+                          </span>
+                        )}
+                      </div>
+                      <div className="forecast-list-details">
+                        {p.wind_speed && (
+                          <span>
+                            {p.wind_direction} {p.wind_speed}
+                          </span>
+                        )}
+                        {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
+                      </div>
                     </div>
                   </div>
                 )
@@ -236,21 +256,32 @@ export function FireDetail() {
             const stat = fire.exposure.find((e) => e.buffer_meters === band)
             if (!stat) return null
             return (
-              <div key={band} className="exposure-band">
+              <div key={band} className="exposure-band-card">
                 <h3>
                   <span className={`band-dot band-dot--${accent}`} />
                   {label}
                 </h3>
-                <div className="stat-row">
-                  <StatCard label="Buildings" value={stat.building_count ?? '—'} accent={accent} icon={BuildingIcon} />
-                  <StatCard
-                    label="Population est."
-                    value={
-                      stat.population_est != null ? Math.round(stat.population_est).toLocaleString() : 'Pending'
-                    }
-                    accent={accent}
-                    icon={PeopleIcon}
-                  />
+                <div className="exposure-band-stats">
+                  <div className="exposure-band-stat">
+                    <div className={`stat-icon stat-icon--${accent}`}>
+                      <BuildingIcon />
+                    </div>
+                    <div>
+                      <div className={`stat-value stat-value--${accent}`}>{stat.building_count ?? '—'}</div>
+                      <div className="stat-label">Buildings</div>
+                    </div>
+                  </div>
+                  <div className="exposure-band-stat">
+                    <div className={`stat-icon stat-icon--${accent}`}>
+                      <PeopleIcon />
+                    </div>
+                    <div>
+                      <div className={`stat-value stat-value--${accent}`}>
+                        {stat.population_est != null ? Math.round(stat.population_est).toLocaleString() : 'Pending'}
+                      </div>
+                      <div className="stat-label">Population est.</div>
+                    </div>
+                  </div>
                 </div>
                 <p className="computed-at">Computed {new Date(stat.computed_at).toLocaleString()}</p>
               </div>
@@ -261,6 +292,7 @@ export function FireDetail() {
 
       <AcquisitionPanel
         fireId={fire.id}
+        fireAcres={fire.acres}
         onScenesChange={setAcquisitionScenes}
         onResultsChange={setAcquisitionResults}
         onConfirmedChange={setAcquisitionConfirmed}
