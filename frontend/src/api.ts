@@ -168,7 +168,6 @@ export interface AcquisitionResultSummary {
   building_damage_counts: Record<string, number>
   total_buildings_classified: number
   threshold_db: number
-  threshold_validated: boolean
   threshold_note: string
   building_dataset: string
   building_dataset_note: string

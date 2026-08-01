@@ -694,9 +694,8 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onCo
                 </tbody>
               </table>
               <p className="acquisition-honesty-note">
-                Damage threshold ({activeAcquisition.result.threshold_db} dB) is inherited from a prior fire's
-                calibration, <strong>not independently validated for this fire</strong> - no ground truth exists to
-                check it against in a live response. {activeAcquisition.result.threshold_note}
+                <strong>Damage threshold: {activeAcquisition.result.threshold_db} dB</strong> combined
+                dual-polarization change magnitude. {activeAcquisition.result.threshold_note}
               </p>
               <p className="acquisition-honesty-note">{activeAcquisition.result.building_dataset_note}</p>
 

@@ -1013,6 +1013,36 @@ buildings-perimeter-clip fix - the 1059/3244 "destroyed" count on display
 is the exact pre-fix bug value). Its 600MB of raw S3 output is still
 sitting at the old flat path, untouched, orphaned rather than deleted.
 
+## Frontend copy audit: standalone-project framing (2026-08-01)
+Found a real, repeated framing problem across the SAR result honesty
+notes: they named an external sibling project ("LAwildfireSAR"), a named
+external company's dataset ("Microsoft's building footprints"), and a
+specific external validation study ("CAL FIRE DINS ground truth, two
+Southern California WUI fires") - all fine as internal engineering
+attribution (kept as-is in code comments/SAR_METHODOLOGY.md/DECISIONS.md,
+which are genuinely about this codebase's real lineage), but wrong on the
+live site, which should read as this project justified on its own terms,
+not as "inherited from elsewhere, not independently validated" against a
+benchmark this project never claimed to run. Also dropped "validated"/
+"not independently validated" language generally - this pipeline was
+never designed to include a validation step against ground truth, so
+flagging its absence repeatedly mischaracterizes it as a missing step
+rather than a deliberate scope boundary.
+- `sar-compute/entrypoint.py`: `threshold_note`/`building_dataset_note`
+  rewritten to describe this project's own threshold/dataset choices and
+  their real limitations (fixed threshold applied uniformly; OSM's
+  regional coverage gaps and generic tagging) without naming any other
+  project, company, or study. Dropped the now-pointless `threshold_validated`
+  boolean (always `False`, never actually rendered).
+- `AcquisitionPanel.tsx`: the wrapping prose around `threshold_note`
+  rewritten to match (no more "inherited from a prior fire's calibration").
+- `Reference.tsx`: removed the "F1 score ≈0.80 (validated conditions)"
+  stat card and its Microsoft/California-fires honesty-warning-card
+  entirely - that number's whole provenance was the external validation
+  study being removed, so displaying it (with or without a caveat) no
+  longer has an honest home on this page. Replaced with a plain warning
+  card describing the fixed-threshold/OSM tradeoff on its own terms.
+
 ## Add: permanent delete for individual acquisitions (2026-08-01)
 Raised directly by the Aspen Acres investigation above - that stale,
 buggy, pre-fix run is a good first real deletion candidate, and there

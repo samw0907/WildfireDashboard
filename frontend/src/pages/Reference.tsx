@@ -313,19 +313,16 @@ export function Reference() {
         </p>
         <PipelineDiagram steps={SAR_PIPELINE_STEPS} />
         <ParamChips params={SAR_PARAMS} />
-        <div className="stat-row">
-          <StatCard label="F1 score (validated conditions)" value="≈0.80" accent="green" />
-        </div>
         <div className="honesty-warning-card">
           <span aria-hidden="true">⚠️</span>
           <span>
-            That F1 score was measured against two specific California fires, using Microsoft's
-            building-footprint dataset and a threshold calibrated against real post-fire damage
-            inspection records. This tool uses OpenStreetMap buildings instead (see{' '}
-            <a href="#known-limitations">known limitations</a>) and the same fixed threshold applied
-            to every fire, with no equivalent ground truth to check it against in a live response.{' '}
-            <strong>Treat every SAR result on this site as illustrative of the method, not as a
-            validated damage assessment for that specific fire.</strong>
+            Damage classification uses a single fixed change-detection threshold, applied the same
+            way to every fire rather than tuned per-incident, against OpenStreetMap building
+            footprints (see <a href="#known-limitations">known limitations</a> for OSM's own
+            coverage gaps). Real damage-inspection records aren't available in a live response
+            setting to check any individual result against.{' '}
+            <strong>Treat every SAR result on this site as a rapid triage signal, not a certified
+            damage assessment.</strong>
           </span>
         </div>
       </section>

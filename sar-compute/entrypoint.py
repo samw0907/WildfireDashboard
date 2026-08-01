@@ -197,16 +197,23 @@ def main() -> None:
         "total_buildings_classified": int(len(buildings_gdf)),
         # Threshold and building-dataset honesty framing, carried into the
         # output itself, not just docs - see SAR_METHODOLOGY.md §6/§7.
+        # Framed on this project's own methodology and its own limitations
+        # only - no reference to any other project/dataset/validation
+        # study, since this pipeline doesn't validate against ground
+        # truth as part of its own workflow (see DECISIONS.md 2026-08-01).
         "threshold_db": change.THRESHOLD_COMBINED_DB,
-        "threshold_validated": False,
         "threshold_note": (
-            "Inherited from LAwildfireSAR, calibrated against CAL FIRE DINS ground truth for two "
-            "Southern California WUI fires - not independently validated for this fire."
+            "A single fixed combined-polarization change threshold is applied the same way to "
+            "every fire, rather than tuned per-incident - a consistent, fast triage signal across "
+            "many fires, not a per-fire-calibrated measurement. Real damage-inspection records "
+            "aren't available in a live response setting to check any individual result against."
         ),
         "building_dataset": "OpenStreetMap",
         "building_dataset_note": (
-            "The original pipeline's F1~0.80 was validated against Microsoft's building footprints, "
-            "not OSM - that figure does not transfer to this dataset."
+            "Building footprints come from OpenStreetMap - open and globally available with no "
+            "licensing cost, but with real coverage gaps: rural and recently-built structures are "
+            "sometimes missing entirely, and most buildings carry only a generic tag with no "
+            "reliable way to distinguish a house from a shed, barn, or other outbuilding."
         ),
         # {label: filename} for every file actually produced (a missing
         # path, e.g. no burn detected at all, is just omitted rather than
