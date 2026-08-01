@@ -15,6 +15,23 @@
       "Effect": "Allow",
       "Action": "s3:GetObject",
       "Resource": "arn:aws:s3:::wildfiredashboard-sar-results-497537671259/acquisitions/*"
+    },
+    {
+      "Sid": "ListSarResultsForDelete",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::wildfiredashboard-sar-results-497537671259",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": "acquisitions/*"
+        }
+      }
+    },
+    {
+      "Sid": "DeleteSarResults",
+      "Effect": "Allow",
+      "Action": "s3:DeleteObject",
+      "Resource": "arn:aws:s3:::wildfiredashboard-sar-results-497537671259/acquisitions/*"
     }
   ]
 }

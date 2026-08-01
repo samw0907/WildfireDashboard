@@ -404,42 +404,42 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onCo
 
   return (
     <div className="acquisition-section">
-      <h3>SAR Acquisition</h3>
+      <div className="acquisition-header">
+        <h3>SAR Acquisition</h3>
+        {activeAcquisition && (
+          <button
+            className="acquisition-delete-btn"
+            disabled={busy || activeAcquisition.status === 'processing'}
+            title={
+              activeAcquisition.status === 'processing'
+                ? 'Wait for this acquisition to finish before deleting it'
+                : `Permanently delete Acquisition #${activeAcquisition.sequence}`
+            }
+            onClick={() => setDeleteTarget(activeAcquisition)}
+          >
+            <TrashIcon /> Delete Acquisition #{activeAcquisition.sequence}
+          </button>
+        )}
+      </div>
       {error && <p className="acquisition-error">{error}</p>}
 
       {acquisitions.length > 0 && (
         <div className="acquisition-tabs">
           {acquisitions.map((a) => (
-            <div key={a.sequence} className="acquisition-tab-wrapper">
-              <button
-                className={`acquisition-tab${a.sequence === activeSequence ? ' acquisition-tab--active' : ''}`}
-                onClick={() => {
-                  setActiveSequence(a.sequence)
-                  resetLocalSelection()
-                }}
-              >
-                <span className="acquisition-tab-title">
-                  Acquisition #{a.sequence}
-                  {acquisitionDateRange(a) && <span className="acquisition-tab-sub">{acquisitionDateRange(a)}</span>}
-                </span>
-                <span className={`acquisition-tab-status acquisition-tab-status--${a.status}`}>{a.status}</span>
-              </button>
-              <button
-                className="acquisition-tab-delete"
-                disabled={busy || a.status === 'processing'}
-                title={
-                  a.status === 'processing'
-                    ? 'Wait for this acquisition to finish before deleting it'
-                    : `Permanently delete Acquisition #${a.sequence}`
-                }
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteTarget(a)
-                }}
-              >
-                <TrashIcon />
-              </button>
-            </div>
+            <button
+              key={a.sequence}
+              className={`acquisition-tab${a.sequence === activeSequence ? ' acquisition-tab--active' : ''}`}
+              onClick={() => {
+                setActiveSequence(a.sequence)
+                resetLocalSelection()
+              }}
+            >
+              <span className="acquisition-tab-title">
+                Acquisition #{a.sequence}
+                {acquisitionDateRange(a) && <span className="acquisition-tab-sub">{acquisitionDateRange(a)}</span>}
+              </span>
+              <span className={`acquisition-tab-status acquisition-tab-status--${a.status}`}>{a.status}</span>
+            </button>
           ))}
           <button
             className="acquisition-tab acquisition-tab--new"

@@ -82,7 +82,7 @@ export function FireDetail() {
   if (error) {
     return <div className="page-error">Fire not found, or the backend is temporarily unavailable.</div>
   }
-  if (!fire) return <PageLoading />
+  if (!fire) return <PageLoading label="Loading fire details… this can take up to 10-15s." />
 
   return (
     <div className="fire-detail">
@@ -112,13 +112,6 @@ export function FireDetail() {
           </span>
         )}
       </div>
-
-      <AcquisitionPanel
-        fireId={fire.id}
-        onScenesChange={setAcquisitionScenes}
-        onResultsChange={setAcquisitionResults}
-        onConfirmedChange={setAcquisitionConfirmed}
-      />
 
       <div className="fire-detail-split">
         <div className="fire-detail-map">
@@ -196,15 +189,49 @@ export function FireDetail() {
             </div>
           )}
         </div>
-        <div className="exposure-panel">
-          <h2>Exposure</h2>
-          <p className="exposure-note">
-            Population figures are estimates, not precise counts - less accurate for small fires
-            in sparse areas. See <Link to="/reference#population-methodology">methodology</Link>.
-          </p>
-          {fire.exposure.length === 0 && (
-            <p className="page-subtitle">Exposure data pending — this fire hasn't been processed yet.</p>
-          )}
+        {weather && weather.periods.length > 0 && (
+          <div className="forecast-column">
+            <h3>Forecast</h3>
+            <div className="forecast-list">
+              {weather.periods.map((p) => {
+                const Icon = forecastIcon(p.short_forecast ?? '')
+                return (
+                  <div key={p.start_time} className="forecast-list-item" title={p.short_forecast ?? undefined}>
+                    <div className="forecast-list-name">{p.name}</div>
+                    <div className="forecast-list-main">
+                      <Icon />
+                      {p.temperature != null && (
+                        <span className="forecast-list-temp">
+                          {p.temperature}&deg;{p.temperature_unit}
+                        </span>
+                      )}
+                    </div>
+                    <div className="forecast-list-details">
+                      {p.wind_speed && (
+                        <span>
+                          {p.wind_direction} {p.wind_speed}
+                        </span>
+                      )}
+                      {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="exposure-panel">
+        <h2>Exposure</h2>
+        <p className="exposure-note">
+          Population figures are estimates, not precise counts - less accurate for small fires
+          in sparse areas. See <Link to="/reference#population-methodology">methodology</Link>.
+        </p>
+        {fire.exposure.length === 0 && (
+          <p className="page-subtitle">Exposure data pending — this fire hasn't been processed yet.</p>
+        )}
+        <div className="exposure-bands-row">
           {BAND_CONFIG.map(({ band, label, accent }) => {
             const stat = fire.exposure.find((e) => e.buffer_meters === band)
             if (!stat) return null
@@ -232,37 +259,12 @@ export function FireDetail() {
         </div>
       </div>
 
-      {weather && weather.periods.length > 0 && (
-        <div className="forecast-section">
-          <h3>Forecast</h3>
-          <div className="forecast-row">
-            {weather.periods.map((p) => {
-              const Icon = forecastIcon(p.short_forecast ?? '')
-              return (
-                <div key={p.start_time} className="forecast-card" title={p.short_forecast ?? undefined}>
-                  <div className="forecast-card-name">{p.name}</div>
-                  <div className="forecast-card-main">
-                    <Icon />
-                    {p.temperature != null && (
-                      <span className="forecast-card-temp">
-                        {p.temperature}&deg;{p.temperature_unit}
-                      </span>
-                    )}
-                  </div>
-                  <div className="forecast-card-details">
-                    {p.wind_speed && (
-                      <span>
-                        {p.wind_direction} {p.wind_speed}
-                      </span>
-                    )}
-                    {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      <AcquisitionPanel
+        fireId={fire.id}
+        onScenesChange={setAcquisitionScenes}
+        onResultsChange={setAcquisitionResults}
+        onConfirmedChange={setAcquisitionConfirmed}
+      />
     </div>
   )
 }
