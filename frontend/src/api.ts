@@ -134,9 +134,23 @@ export interface Scene {
   footprint: GeoJSON.Geometry | null
 }
 
+export interface ScenePriorUse {
+  sequence: number
+  side: 'before' | 'after'
+  status: 'marked' | 'processing' | 'complete' | 'failed'
+}
+
+// A scene as offered by the candidates endpoint - same as Scene, plus
+// which of this fire's own prior acquisitions (if any) already used it,
+// so the picker can flag "already used in Acquisition #1 (before)"
+// without silently pre-selecting or hiding anything.
+export interface CandidateScene extends Scene {
+  previously_used: ScenePriorUse[]
+}
+
 export interface AcquisitionCandidates {
-  before: Scene[]
-  after: Scene[]
+  before: CandidateScene[]
+  after: CandidateScene[]
 }
 
 // Compact result_summary.json contents - see sar-compute/entrypoint.py for
@@ -161,7 +175,9 @@ export interface AcquisitionResultSummary {
   // {label: filename} for every file actually produced - fetch via
   // acquisitionDownloadUrl(fireId, filename), not directly (the results
   // bucket is private, this is a label->filename map, not a URL map).
-  files: Record<string, string>
+  // Optional: absent (not just empty) on results persisted before this
+  // manifest field existed in entrypoint.py - callers must fall back to {}.
+  files?: Record<string, string>
 }
 
 // Figures worth rendering inline on the Fire Detail page, in display
@@ -174,16 +190,20 @@ export const INLINE_FIGURE_LABELS: { key: string; title: string }[] = [
   { key: 'backscatter_panel', title: 'Backscatter Comparison' },
 ]
 
-export function acquisitionDownloadUrl(fireId: string, filename: string): string {
-  return `${API_BASE_URL}/api/fires/${fireId}/acquisition/download/${encodeURIComponent(filename)}`
+export function acquisitionDownloadUrl(fireId: string, sequence: number, filename: string): string {
+  return `${API_BASE_URL}/api/fires/${fireId}/acquisitions/${sequence}/download/${encodeURIComponent(filename)}`
 }
 
-export function acquisitionDownloadAllUrl(fireId: string): string {
-  return `${API_BASE_URL}/api/fires/${fireId}/acquisition/download-all`
+export function acquisitionDownloadAllUrl(fireId: string, sequence: number): string {
+  return `${API_BASE_URL}/api/fires/${fireId}/acquisitions/${sequence}/download-all`
 }
 
 export interface Acquisition {
-  status: 'marked' | 'confirmed' | 'processing' | 'complete' | 'failed' | null
+  // Numbers this fire's own acquisition attempts starting at 1, in
+  // creation order - what tabs are labeled/keyed by.
+  sequence: number
+  created_at: string
+  status: 'marked' | 'processing' | 'complete' | 'failed'
   before_scenes: Scene[]
   after_scenes: Scene[]
   // 'composite' (3+3, real median-compositing benefit) | 'single_pair'
@@ -202,32 +222,53 @@ export interface Acquisition {
   error: string | null
 }
 
-export function getAcquisition(id: string): Promise<Acquisition> {
-  return get<Acquisition>(`/api/fires/${id}/acquisition`)
+// All of a fire's acquisition attempts, oldest first - empty if none has
+// ever been started. Drives the tab strip in AcquisitionPanel.
+export function listAcquisitions(fireId: string): Promise<Acquisition[]> {
+  return get<Acquisition[]>(`/api/fires/${fireId}/acquisitions`)
 }
 
-export function getAcquisitionCandidates(id: string): Promise<AcquisitionCandidates> {
-  return get<AcquisitionCandidates>(`/api/fires/${id}/acquisition/candidates`)
+export function getAcquisition(fireId: string, sequence: number): Promise<Acquisition> {
+  return get<Acquisition>(`/api/fires/${fireId}/acquisitions/${sequence}`)
 }
 
-export function markForAcquisition(id: string): Promise<unknown> {
-  return authenticatedRequest(`/api/fires/${id}/acquisition/mark`, { method: 'POST' })
+// Fire-wide (not sequence-scoped) - the same candidate window regardless
+// of which acquisition attempt is being worked on, annotated with which
+// scenes any of this fire's prior acquisitions already used.
+export function getAcquisitionCandidates(fireId: string): Promise<AcquisitionCandidates> {
+  return get<AcquisitionCandidates>(`/api/fires/${fireId}/acquisition/candidates`)
 }
 
-export function selectAcquisitionScenes(id: string, before: Scene[], after: Scene[]): Promise<unknown> {
-  return authenticatedRequest(`/api/fires/${id}/acquisition/select`, {
+// Starts a new draft acquisition (sequence = previous max + 1). Rejected
+// by the backend if this fire already has a non-terminal ('marked' or
+// 'processing') acquisition in flight - resolve or unmark that one first.
+export function createAcquisition(fireId: string): Promise<Acquisition> {
+  return authenticatedRequest(`/api/fires/${fireId}/acquisitions`, { method: 'POST' })
+}
+
+export function selectAcquisitionScenes(
+  fireId: string,
+  sequence: number,
+  before: Scene[],
+  after: Scene[],
+): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${fireId}/acquisitions/${sequence}/select`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ before, after }),
   })
 }
 
-export function confirmAcquisition(id: string): Promise<unknown> {
-  return authenticatedRequest(`/api/fires/${id}/acquisition/confirm`, { method: 'POST' })
+export function confirmAcquisition(fireId: string, sequence: number): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${fireId}/acquisitions/${sequence}/confirm`, { method: 'POST' })
 }
 
-export function unmarkAcquisition(id: string): Promise<unknown> {
-  return authenticatedRequest(`/api/fires/${id}/acquisition/unmark`, { method: 'POST' })
+// Only valid pre-confirmation - deletes the draft outright rather than
+// resetting it, matching the backend's "row existence means a real
+// attempt was made" rule. Confirmed/processing/complete/failed
+// acquisitions can't be unmarked this way; they're real history.
+export function unmarkAcquisition(fireId: string, sequence: number): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${fireId}/acquisitions/${sequence}/unmark`, { method: 'POST' })
 }
 
 export function exposureAtBand(exposure: ExposureStat[], bufferMeters: number): ExposureStat | undefined {

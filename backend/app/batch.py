@@ -14,20 +14,27 @@ import boto3
 from .config import get_settings
 
 
-def submit_sar_job(fire_id: str) -> str:
-    """Submit one Batch job for a confirmed fire's SAR compute run.
-    FIRE_ID is the only per-job override - everything else the container
-    needs (scenes, mode, perimeter) it fetches itself from this backend's
-    own public API, matching entrypoint.py's design."""
+def submit_sar_job(fire_id: str, sequence: int) -> str:
+    """Submit one Batch job for a confirmed acquisition's SAR compute run.
+    FIRE_ID and ACQUISITION_SEQUENCE are the only per-job overrides -
+    everything else the container needs (scenes, mode, perimeter) it
+    fetches itself from this backend's own public API, matching
+    entrypoint.py's design. The sequence is what keeps this run's S3
+    outputs from colliding with any other acquisition on the same fire."""
     settings = get_settings()
     if not settings.sar_batch_job_queue or not settings.sar_batch_job_definition:
         raise RuntimeError("SAR_BATCH_JOB_QUEUE and SAR_BATCH_JOB_DEFINITION must both be set")
 
     client = boto3.client("batch", region_name=settings.aws_region)
     response = client.submit_job(
-        jobName=f"sar-compute-{fire_id}",
+        jobName=f"sar-compute-{fire_id}-{sequence}",
         jobQueue=settings.sar_batch_job_queue,
         jobDefinition=settings.sar_batch_job_definition,
-        containerOverrides={"environment": [{"name": "FIRE_ID", "value": fire_id}]},
+        containerOverrides={
+            "environment": [
+                {"name": "FIRE_ID", "value": fire_id},
+                {"name": "ACQUISITION_SEQUENCE", "value": str(sequence)},
+            ]
+        },
     )
     return response["jobId"]

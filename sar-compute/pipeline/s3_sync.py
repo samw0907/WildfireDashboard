@@ -31,12 +31,13 @@ def upload_file(s3_client, local_path: str, bucket: str, s3_key: str) -> None:
         s3_client.upload_file(local_path, bucket, s3_key)
 
 
-def run_sync(fire_id: str, bucket: str, region: str, files: dict[str, str]) -> dict[str, str]:
+def run_sync(fire_id: str, sequence: int, bucket: str, region: str, files: dict[str, str]) -> dict[str, str]:
     """Uploads the given {label: local_path} files under
-    s3://{bucket}/acquisitions/{fire_id}/{label-derived filename}.
-    Returns {label: s3_key} for whichever files existed and were uploaded
-    (a missing/None local path is skipped, not an error - e.g. no burn
-    perimeter was detected at all)."""
+    s3://{bucket}/acquisitions/{fire_id}/{sequence}/{label-derived filename}.
+    The sequence keeps a later acquisition on the same fire from silently
+    overwriting an earlier one's results. Returns {label: s3_key} for
+    whichever files existed and were uploaded (a missing/None local path
+    is skipped, not an error - e.g. no burn perimeter was detected at all)."""
     s3_client = get_s3_client(region)
 
     try:
@@ -45,15 +46,16 @@ def run_sync(fire_id: str, bucket: str, region: str, files: dict[str, str]) -> d
         logger.error("Cannot access S3 bucket '%s': %s", bucket, exc)
         raise
 
+    prefix = f"acquisitions/{fire_id}/{sequence}"
     uploaded_keys = {}
     for label, local_path in files.items():
         if not local_path or not os.path.exists(local_path):
             logger.info("Skipping %s - no output file produced", label)
             continue
         filename = os.path.basename(local_path)
-        s3_key = f"acquisitions/{fire_id}/{filename}"
+        s3_key = f"{prefix}/{filename}"
         upload_file(s3_client, local_path, bucket, s3_key)
         uploaded_keys[label] = s3_key
 
-    logger.info("Sync complete: %d files uploaded to s3://%s/acquisitions/%s/", len(uploaded_keys), bucket, fire_id)
+    logger.info("Sync complete: %d files uploaded to s3://%s/%s/", len(uploaded_keys), bucket, prefix)
     return uploaded_keys

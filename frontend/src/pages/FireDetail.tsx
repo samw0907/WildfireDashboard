@@ -58,6 +58,7 @@ export function FireDetail() {
     burnPerimeter: GeoJSON.FeatureCollection | null
     buildingDamage: GeoJSON.FeatureCollection | null
   }>({ burnPerimeter: null, buildingDamage: null })
+  const [acquisitionConfirmed, setAcquisitionConfirmed] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -112,7 +113,12 @@ export function FireDetail() {
         )}
       </div>
 
-      <AcquisitionPanel fireId={fire.id} onScenesChange={setAcquisitionScenes} onResultsChange={setAcquisitionResults} />
+      <AcquisitionPanel
+        fireId={fire.id}
+        onScenesChange={setAcquisitionScenes}
+        onResultsChange={setAcquisitionResults}
+        onConfirmedChange={setAcquisitionConfirmed}
+      />
 
       <div className="fire-detail-split">
         <div className="fire-detail-map">
@@ -126,6 +132,8 @@ export function FireDetail() {
               after: acquisitionScenes.after.map((s) => s.footprint).filter((f): f is GeoJSON.Geometry => f != null),
             }}
             sarResults={acquisitionResults}
+            scenesConfirmed={acquisitionConfirmed}
+            buildings={fire.buildings}
             enableAlerts
             alertsDefaultVisible={false}
           />

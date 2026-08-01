@@ -89,9 +89,23 @@ class SceneIn(BaseModel):
     footprint: dict | None = None
 
 
+class ScenePriorUseOut(BaseModel):
+    sequence: int
+    side: str  # 'before' | 'after'
+    status: str  # that acquisition's own status, e.g. 'complete'/'failed'
+
+
+class CandidateSceneOut(SceneOut):
+    # Every prior acquisition on this same fire that already used this
+    # exact scene, if any - lets the picker surface "you used this as the
+    # before-scene in Acquisition #1" so a human can deliberately reuse or
+    # avoid a scene, rather than the picker silently pre-selecting it.
+    previously_used: list[ScenePriorUseOut] = []
+
+
 class AcquisitionCandidatesOut(BaseModel):
-    before: list[SceneOut]
-    after: list[SceneOut]
+    before: list[CandidateSceneOut]
+    after: list[CandidateSceneOut]
 
 
 class AcquisitionSelectIn(BaseModel):
@@ -106,7 +120,11 @@ class AcquisitionSelectIn(BaseModel):
 
 
 class AcquisitionOut(BaseModel):
-    status: str | None
+    # Numbers this fire's own acquisition attempts starting at 1, in
+    # creation order - what tabs/labels in the UI key off.
+    sequence: int
+    created_at: datetime
+    status: str
     before_scenes: list[SceneOut]
     after_scenes: list[SceneOut]
     # 'composite' (3+3) | 'single_pair' (1+1) | None if nothing selected yet -

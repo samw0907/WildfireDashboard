@@ -1,10 +1,16 @@
 """Human-in-the-loop SAR acquisition workflow (see DECISIONS.md): mark a
 fire for follow-up, browse real live CDSE candidate scenes for a sensible
 pre/post-fire window, let a human pick a before/after pair, then confirm.
-Actual compute dispatch (RTC processing, change detection) is a separate,
-not-yet-built phase - "confirm" here only records the decision.
+Actual compute dispatch (RTC processing, change detection) is a separate
+phase - "confirm" here only records the decision and submits the job.
 
-State-mutating actions (mark/select/confirm/unmark) are admin-key gated,
+A fire can be acquired more than once over its lifetime (conditions
+change, a better after-scene becomes available later) - each attempt is
+its own `Acquisition` row, numbered by `sequence` starting at 1. Only one
+non-terminal attempt (status 'marked' or 'processing') is allowed per fire
+at a time; completed/failed attempts don't block starting a new one.
+
+State-mutating actions (create/select/confirm/unmark) are admin-key gated,
 matching the recompute endpoint's pattern - candidate search itself is
 free (no CDSE auth needed) so it stays open for browsing.
 """
@@ -18,6 +24,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse, StreamingResponse
 from shapely.geometry import shape
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import cdse, geo
@@ -25,8 +32,14 @@ from ..auth import require_admin_key
 from ..batch import submit_sar_job
 from ..config import get_settings
 from ..db import SessionLocal
-from ..models import Fire
-from ..schemas import AcquisitionCandidatesOut, AcquisitionOut, AcquisitionSelectIn, SceneOut
+from ..models import Acquisition, Fire
+from ..schemas import (
+    AcquisitionCandidatesOut,
+    AcquisitionOut,
+    AcquisitionSelectIn,
+    CandidateSceneOut,
+    ScenePriorUseOut,
+)
 
 # How far around the fire's discovery date to search for candidate scenes.
 # Sentinel-1's revisit interval is roughly 6-12 days depending on
@@ -50,6 +63,10 @@ SEARCH_BUFFER_METERS = 3000
 # uses exactly 1. Deliberately no size in between - see SAR_METHODOLOGY.md §8.
 VALID_SELECTION_SIZES = (1, 3)
 
+# An acquisition in either of these statuses is still "in play" - only one
+# per fire at a time, so a new one can't be started until it's resolved.
+NON_TERMINAL_STATUSES = ("marked", "processing")
+
 router = APIRouter(prefix="/api")
 
 
@@ -68,7 +85,24 @@ def _get_fire_or_404(db: Session, fire_id: str) -> Fire:
     return fire
 
 
-def _scene_out(scene: dict, fire_geom_albers, fire_area_albers: float) -> SceneOut:
+def _get_acquisition_or_404(db: Session, fire_id: str, sequence: int) -> Acquisition:
+    acquisition = db.scalars(
+        select(Acquisition).where(Acquisition.fire_id == fire_id, Acquisition.sequence == sequence)
+    ).first()
+    if acquisition is None:
+        raise HTTPException(status_code=404, detail="Acquisition not found")
+    return acquisition
+
+
+def _list_acquisitions(db: Session, fire_id: str) -> list[Acquisition]:
+    return list(
+        db.scalars(
+            select(Acquisition).where(Acquisition.fire_id == fire_id).order_by(Acquisition.sequence)
+        ).all()
+    )
+
+
+def _scene_out(scene: dict, fire_geom_albers, fire_area_albers: float) -> CandidateSceneOut:
     coverage_percent = None
     footprint = scene.get("footprint")
     if footprint and fire_area_albers > 0:
@@ -85,7 +119,7 @@ def _scene_out(scene: dict, fire_geom_albers, fire_area_albers: float) -> SceneO
         except Exception:
             coverage_percent = None
 
-    return SceneOut(
+    return CandidateSceneOut(
         id=scene["id"],
         name=scene["name"],
         date=scene["date"],
@@ -97,6 +131,23 @@ def _scene_out(scene: dict, fire_geom_albers, fire_area_albers: float) -> SceneO
     )
 
 
+def _annotate_previous_use(scenes: list[CandidateSceneOut], prior_acquisitions: list[Acquisition]) -> None:
+    """Mutates each scene in place, filling in `previously_used` from
+    every earlier acquisition on this same fire that selected it - so the
+    picker can show "already used in Acquisition #1 (before)" instead of
+    silently pre-selecting or hiding anything. A human still picks freely;
+    this is informational only."""
+    uses_by_id: dict[str, list[ScenePriorUseOut]] = {}
+    for acq in prior_acquisitions:
+        for side, side_scenes in (("before", acq.before_scenes or []), ("after", acq.after_scenes or [])):
+            for s in side_scenes:
+                uses_by_id.setdefault(s["id"], []).append(
+                    ScenePriorUseOut(sequence=acq.sequence, side=side, status=acq.status)
+                )
+    for scene in scenes:
+        scene.previously_used = uses_by_id.get(scene.id, [])
+
+
 def _acquisition_mode(before_scenes: list) -> str | None:
     if len(before_scenes) == 3:
         return "composite"
@@ -105,41 +156,50 @@ def _acquisition_mode(before_scenes: list) -> str | None:
     return None
 
 
-def _to_acquisition_out(fire: Fire) -> AcquisitionOut:
-    before_scenes = fire.acquisition_before_scenes or []
-    after_scenes = fire.acquisition_after_scenes or []
+def _to_acquisition_out(acq: Acquisition) -> AcquisitionOut:
+    before_scenes = acq.before_scenes or []
+    after_scenes = acq.after_scenes or []
     return AcquisitionOut(
-        status=fire.acquisition_status,
-        before_scenes=[SceneOut(**s) for s in before_scenes],
-        after_scenes=[SceneOut(**s) for s in after_scenes],
+        sequence=acq.sequence,
+        created_at=acq.created_at,
+        status=acq.status,
+        before_scenes=before_scenes,
+        after_scenes=after_scenes,
         mode=_acquisition_mode(before_scenes),
-        confirmed_at=fire.acquisition_confirmed_at,
-        batch_job_id=fire.acquisition_batch_job_id,
-        result=fire.acquisition_result,
-        burn_perimeter=fire.acquisition_burn_perimeter,
-        building_damage=fire.acquisition_building_damage,
-        error=fire.acquisition_error,
+        confirmed_at=acq.confirmed_at,
+        batch_job_id=acq.batch_job_id,
+        result=acq.result,
+        burn_perimeter=acq.burn_perimeter,
+        building_damage=acq.building_damage,
+        error=acq.error,
     )
 
 
-@router.get("/fires/{fire_id}/acquisition", response_model=AcquisitionOut)
-def get_acquisition(fire_id: str, db: Session = Depends(get_db)):
-    fire = _get_fire_or_404(db, fire_id)
-    return _to_acquisition_out(fire)
+@router.get("/fires/{fire_id}/acquisitions", response_model=list[AcquisitionOut])
+def list_acquisitions(fire_id: str, db: Session = Depends(get_db)):
+    _get_fire_or_404(db, fire_id)
+    return [_to_acquisition_out(a) for a in _list_acquisitions(db, fire_id)]
 
 
-@router.get("/fires/{fire_id}/acquisition/download/{filename}")
-def download_acquisition_file(fire_id: str, filename: str, db: Session = Depends(get_db)):
+@router.get("/fires/{fire_id}/acquisitions/{sequence}", response_model=AcquisitionOut)
+def get_acquisition(fire_id: str, sequence: int, db: Session = Depends(get_db)):
+    _get_fire_or_404(db, fire_id)
+    return _to_acquisition_out(_get_acquisition_or_404(db, fire_id, sequence))
+
+
+@router.get("/fires/{fire_id}/acquisitions/{sequence}/download/{filename}")
+def download_acquisition_file(fire_id: str, sequence: int, filename: str, db: Session = Depends(get_db)):
     """Redirects to a short-lived presigned S3 URL - the results bucket
     blocks all public access (see DECISIONS.md Phase D), so this is the
     only way the frontend can offer a plain <a href>/<img src> download
     link without exposing the bucket itself. Public/read-only, matching
     every other GET here - these are just result files, not anything
     sensitive, and downloading one costs nothing."""
-    fire = _get_fire_or_404(db, fire_id)
-    manifest = (fire.acquisition_result or {}).get("files", {})
+    _get_fire_or_404(db, fire_id)
+    acq = _get_acquisition_or_404(db, fire_id, sequence)
+    manifest = (acq.result or {}).get("files", {})
     if filename not in manifest.values():
-        raise HTTPException(status_code=404, detail="File not found for this fire's acquisition results")
+        raise HTTPException(status_code=404, detail="File not found for this acquisition's results")
 
     settings = get_settings()
     # Explicit regional endpoint_url, not just region_name - boto3's S3
@@ -156,23 +216,24 @@ def download_acquisition_file(fire_id: str, filename: str, db: Session = Depends
     )
     url = client.generate_presigned_url(
         "get_object",
-        Params={"Bucket": settings.sar_results_bucket, "Key": f"acquisitions/{fire_id}/{filename}"},
+        Params={"Bucket": settings.sar_results_bucket, "Key": f"acquisitions/{fire_id}/{sequence}/{filename}"},
         ExpiresIn=300,
     )
     return RedirectResponse(url)
 
 
-@router.get("/fires/{fire_id}/acquisition/download-all")
-def download_all_acquisition_files(fire_id: str, db: Session = Depends(get_db)):
-    """Zips every file in the fire's result manifest and streams it back -
-    a real download convenience given how many files one acquisition now
-    produces (raw RTC rasters + GeoJSON + figures), not just a nice-to-have.
-    Built in-memory rather than a temp file on disk - fine at this
-    project's per-fire result sizes and demo-scale traffic."""
-    fire = _get_fire_or_404(db, fire_id)
-    manifest = (fire.acquisition_result or {}).get("files", {})
+@router.get("/fires/{fire_id}/acquisitions/{sequence}/download-all")
+def download_all_acquisition_files(fire_id: str, sequence: int, db: Session = Depends(get_db)):
+    """Zips every file in this acquisition's result manifest and streams it
+    back - a real download convenience given how many files one
+    acquisition now produces (raw RTC rasters + GeoJSON + figures), not
+    just a nice-to-have. Built in-memory rather than a temp file on disk -
+    fine at this project's per-fire result sizes and demo-scale traffic."""
+    _get_fire_or_404(db, fire_id)
+    acq = _get_acquisition_or_404(db, fire_id, sequence)
+    manifest = (acq.result or {}).get("files", {})
     if not manifest:
-        raise HTTPException(status_code=404, detail="No result files available for this fire")
+        raise HTTPException(status_code=404, detail="No result files available for this acquisition")
 
     settings = get_settings()
     client = boto3.client(
@@ -182,14 +243,14 @@ def download_all_acquisition_files(fire_id: str, db: Session = Depends(get_db)):
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for filename in manifest.values():
-            obj = client.get_object(Bucket=settings.sar_results_bucket, Key=f"acquisitions/{fire_id}/{filename}")
+            obj = client.get_object(Bucket=settings.sar_results_bucket, Key=f"acquisitions/{fire_id}/{sequence}/{filename}")
             zf.writestr(filename, obj["Body"].read())
     buffer.seek(0)
 
     return StreamingResponse(
         buffer,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{fire_id}-sar-results.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="{fire_id}-acquisition-{sequence}-results.zip"'},
     )
 
 
@@ -220,29 +281,46 @@ def get_acquisition_candidates(fire_id: str, db: Session = Depends(get_db)):
     fire_geom_albers = geo.to_albers(shape(fire.perimeter)).buffer(0)
     fire_area_albers = fire_geom_albers.area
 
-    return AcquisitionCandidatesOut(
-        before=[_scene_out(s, fire_geom_albers, fire_area_albers) for s in before_scenes],
-        after=[_scene_out(s, fire_geom_albers, fire_area_albers) for s in after_scenes],
-    )
+    before_out = [_scene_out(s, fire_geom_albers, fire_area_albers) for s in before_scenes]
+    after_out = [_scene_out(s, fire_geom_albers, fire_area_albers) for s in after_scenes]
+
+    prior_acquisitions = _list_acquisitions(db, fire_id)
+    _annotate_previous_use(before_out, prior_acquisitions)
+    _annotate_previous_use(after_out, prior_acquisitions)
+
+    return AcquisitionCandidatesOut(before=before_out, after=after_out)
 
 
-@router.post("/fires/{fire_id}/acquisition/mark", dependencies=[Depends(require_admin_key)])
-def mark_for_acquisition(fire_id: str, db: Session = Depends(get_db)):
+@router.post("/fires/{fire_id}/acquisitions", dependencies=[Depends(require_admin_key)], response_model=AcquisitionOut)
+def create_acquisition(fire_id: str, db: Session = Depends(get_db)):
     fire = _get_fire_or_404(db, fire_id)
     if fire.discovered_date is None:
         raise HTTPException(
             status_code=400, detail="Fire has no discovery date on record - cannot mark for acquisition"
         )
-    fire.acquisition_status = "marked"
+
+    existing = _list_acquisitions(db, fire_id)
+    in_flight = next((a for a in existing if a.status in NON_TERMINAL_STATUSES), None)
+    if in_flight is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Acquisition #{in_flight.sequence} is still {in_flight.status} - resolve it before starting another",
+        )
+
+    next_sequence = (max((a.sequence for a in existing), default=0)) + 1
+    acquisition = Acquisition(fire_id=fire_id, sequence=next_sequence, status="marked")
+    db.add(acquisition)
     db.commit()
-    return {"status": "marked"}
+    db.refresh(acquisition)
+    return _to_acquisition_out(acquisition)
 
 
-@router.post("/fires/{fire_id}/acquisition/select", dependencies=[Depends(require_admin_key)])
-def select_scenes(fire_id: str, body: AcquisitionSelectIn, db: Session = Depends(get_db)):
-    fire = _get_fire_or_404(db, fire_id)
-    if fire.acquisition_status is None:
-        raise HTTPException(status_code=400, detail="Fire is not marked for acquisition yet")
+@router.post("/fires/{fire_id}/acquisitions/{sequence}/select", dependencies=[Depends(require_admin_key)])
+def select_scenes(fire_id: str, sequence: int, body: AcquisitionSelectIn, db: Session = Depends(get_db)):
+    _get_fire_or_404(db, fire_id)
+    acquisition = _get_acquisition_or_404(db, fire_id, sequence)
+    if acquisition.status != "marked":
+        raise HTTPException(status_code=400, detail=f"Acquisition #{sequence} is {acquisition.status}, not marked")
 
     if len(body.before) not in VALID_SELECTION_SIZES or len(body.after) not in VALID_SELECTION_SIZES:
         raise HTTPException(
@@ -265,19 +343,20 @@ def select_scenes(fire_id: str, body: AcquisitionSelectIn, db: Session = Depends
             detail=f"All selected scenes must share the same track (relative orbit) - got {sorted(t for t in all_tracks if t is not None)}",
         )
 
-    fire.acquisition_before_scenes = [s.model_dump(mode="json") for s in body.before]
-    fire.acquisition_after_scenes = [s.model_dump(mode="json") for s in body.after]
+    acquisition.before_scenes = [s.model_dump(mode="json") for s in body.before]
+    acquisition.after_scenes = [s.model_dump(mode="json") for s in body.after]
     db.commit()
     return {"status": "scenes_selected", "mode": _acquisition_mode(body.before)}
 
 
-@router.post("/fires/{fire_id}/acquisition/confirm", dependencies=[Depends(require_admin_key)])
-def confirm_acquisition(fire_id: str, db: Session = Depends(get_db)):
-    fire = _get_fire_or_404(db, fire_id)
-    if not fire.acquisition_before_scenes or not fire.acquisition_after_scenes:
+@router.post("/fires/{fire_id}/acquisitions/{sequence}/confirm", dependencies=[Depends(require_admin_key)])
+def confirm_acquisition(fire_id: str, sequence: int, db: Session = Depends(get_db)):
+    _get_fire_or_404(db, fire_id)
+    acquisition = _get_acquisition_or_404(db, fire_id, sequence)
+    if not acquisition.before_scenes or not acquisition.after_scenes:
         raise HTTPException(status_code=400, detail="Select both before and after scenes before confirming")
 
-    fire.acquisition_confirmed_at = datetime.now(timezone.utc)
+    acquisition.confirmed_at = datetime.now(timezone.utc)
 
     # Submitted synchronously in the same request rather than handed off to
     # the polling loop to kick off - the loop's job is only to watch jobs
@@ -287,31 +366,32 @@ def confirm_acquisition(fire_id: str, db: Session = Depends(get_db)):
     # Batch unreachable) surfaces immediately to the operator instead of
     # silently sitting in 'confirmed' forever.
     try:
-        job_id = submit_sar_job(fire_id)
+        job_id = submit_sar_job(fire_id, sequence)
     except Exception as exc:
-        fire.acquisition_status = "failed"
-        fire.acquisition_error = f"Failed to submit compute job: {exc}"
+        acquisition.status = "failed"
+        acquisition.error = f"Failed to submit compute job: {exc}"
         db.commit()
-        raise HTTPException(status_code=502, detail=fire.acquisition_error) from exc
+        raise HTTPException(status_code=502, detail=acquisition.error) from exc
 
-    fire.acquisition_status = "processing"
-    fire.acquisition_batch_job_id = job_id
-    fire.acquisition_error = None
+    acquisition.status = "processing"
+    acquisition.batch_job_id = job_id
+    acquisition.error = None
     db.commit()
     return {"status": "processing", "batch_job_id": job_id}
 
 
-@router.post("/fires/{fire_id}/acquisition/unmark", dependencies=[Depends(require_admin_key)])
-def unmark_acquisition(fire_id: str, db: Session = Depends(get_db)):
-    fire = _get_fire_or_404(db, fire_id)
-    fire.acquisition_status = None
-    fire.acquisition_before_scenes = None
-    fire.acquisition_after_scenes = None
-    fire.acquisition_confirmed_at = None
-    fire.acquisition_batch_job_id = None
-    fire.acquisition_result = None
-    fire.acquisition_burn_perimeter = None
-    fire.acquisition_building_damage = None
-    fire.acquisition_error = None
+@router.post("/fires/{fire_id}/acquisitions/{sequence}/unmark", dependencies=[Depends(require_admin_key)])
+def unmark_acquisition(fire_id: str, sequence: int, db: Session = Depends(get_db)):
+    """Deletes a never-confirmed draft outright, rather than resetting its
+    fields - once an acquisition has been confirmed it's real history and
+    must never be discarded this way (enforced by the status check below);
+    only an abandoned draft can be unmarked."""
+    _get_fire_or_404(db, fire_id)
+    acquisition = _get_acquisition_or_404(db, fire_id, sequence)
+    if acquisition.status != "marked":
+        raise HTTPException(
+            status_code=400, detail=f"Acquisition #{sequence} is {acquisition.status} - only a draft can be unmarked"
+        )
+    db.delete(acquisition)
     db.commit()
     return {"status": "unmarked"}

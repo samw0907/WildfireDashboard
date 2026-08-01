@@ -937,3 +937,112 @@ on together:
       - Reference page's priority-score section rewritten to describe the
         new formula and explain both "why cut exposure" and "why these
         two things were deliberately left out," not just the new numbers.
+
+## Multi-acquisition support: real history table + tabbed UI (2026-08-01)
+Resolved the backlog item below by actually building it, once discussed.
+See DECISIONS.md "Multi-acquisition support" for the full design
+reasoning. Summary of what changed:
+- New `acquisitions` table (migration `5e6f2ea48eea`), one row per
+  attempt per fire, keyed by `fire_id` + `sequence` (1-indexed). Replaces
+  the old single-slot `acquisition_*` columns on `Fire`, which are now
+  dropped; any existing acquisition per fire is preserved as sequence=1.
+  A never-confirmed draft is deleted outright on unmark, not reset to
+  nulls - row existence now always means a real attempt was made. Only
+  one non-terminal (`marked`/`processing`) acquisition allowed per fire
+  at a time, enforced server-side.
+- `routers/acquisition.py` rewritten around sequence-scoped endpoints:
+  `GET/POST /fires/{id}/acquisitions`, `GET/POST .../acquisitions/{seq}`
+  + `/select`, `/confirm`, `/unmark`, `/download/{filename}`,
+  `/download-all`. `sar_batch.py`'s poller and `batch.py`'s
+  `submit_sar_job` both updated to key off `Acquisition` rows instead of
+  `Fire` columns, passing `ACQUISITION_SEQUENCE` to the Batch job
+  alongside `FIRE_ID`.
+- S3 layout changed from `acquisitions/{fire_id}/{filename}` to
+  `acquisitions/{fire_id}/{sequence}/{filename}` (`s3_sync.py`,
+  `entrypoint.py`) - the old flat layout would have silently overwritten
+  an earlier run's results the moment a fire got acquired twice.
+- Candidates endpoint now annotates every scene with `previously_used`
+  (which prior acquisition(s) on this fire already selected it, as
+  before/after-ignition, plus that acquisition's status) - retrigger flow
+  is a fully fresh pick every time (no scene selection carried forward
+  automatically), but a human can now see prior usage and deliberately
+  reuse or avoid a scene instead of picking blind.
+- `AcquisitionPanel.tsx` rewritten as a tab strip - one tab per past
+  acquisition (label: sequence + before→after date range + status
+  badge), a "+ New" tab disabled while any acquisition is non-terminal.
+  Scene-picker labels changed from "Before"/"After" to "Before
+  ignition"/"After ignition" throughout for clarity.
+- Also fixed a real crash found on the live site: `AcquisitionPanel`
+  threw `Cannot read properties of undefined (reading 'overview_map')`
+  on Aspen Acres specifically - its stored result predates the `files`
+  manifest field added earlier this build (Kaiser Canyon had no result
+  yet at all, so it never hit the code path). `files` is now typed
+  optional and defaulted to `{}` at every use site; a completed
+  acquisition with no manifest now shows a plain "predates figure/
+  download support" note instead of crashing the page.
+- Scene footprints map layer: now auto-hides and the map re-fits to just
+  the fire perimeter the moment scenes are confirmed (`FireMap.tsx`'s new
+  `scenesConfirmed` prop + `sceneFootprintsVisible` state), since
+  footprints matter most during picking - still toggleable back on
+  manually via a new `scene-footprints-toggle` checkbox.
+
+## Backlog: multi-acquisition UX per fire (2026-08-01, raised, then resolved same day)
+Current schema/UI assumes exactly one acquisition in flight per fire ever
+(`acquisition_status` etc. are columns on `Fire` itself, not a history
+table - see the original Phase A schema decision in `DECISIONS.md`). Real
+open questions raised, not yet resolved: what happens when a user wants to
+run a *second* acquisition on the same fire (it's still active weeks
+later, conditions have changed)? Should the UI show a tab/list to flick
+between past acquisitions on one fire, and how should each one be labeled
+(date? scene dates? sequence number?) so they're distinguishable? Should
+"confirm & proceed" ever be re-offered as a one-click retrigger of the
+*exact same* scene selection, or does that risk being wrong once the fire
+has moved on and different scenes would now make more sense? Whatever the
+answer, it likely means `acquisition_before_scenes`/`acquisition_result`/
+etc. need to become a real history (a new table, keyed by fire + sequence
+or timestamp) rather than mutable columns on `Fire` - a genuine schema
+migration, not a quick UI add. Needs its own proper design discussion
+before touching any code.
+
+**Resolved same day** - see "Multi-acquisition support" above.
+
+## UI/UX polish round (2026-08-01)
+Five small, independent fixes to the Fire Detail page, raised together
+after reviewing the live site:
+- **Building footprints as a map layer** - `FireMap.tsx` gained a new
+  `buildings` prop (already-fetched OSM data, the same cache the
+  building-count stat cards use - see `FireDetail.tsx`), rendered as its
+  own source/fill/line layer pair in a single flat slate-blue-gray color
+  (`#475569`), deliberately distinct from every other hue family already
+  on the map (buffer gradient, alerts, scene footprints, burn area,
+  damage classes). Default-on per request; a `buildings-toggle` checkbox
+  lets it be hidden. Single color is deliberate - which buffer ring a
+  building sits inside already tells you its band, so per-band coloring
+  would be redundant.
+- **Wind indicator/RFW toggle overlap fixed** - both were positioned
+  identically at `top: 12px; right: 12px` (a literal DOM collision).
+  Wind indicator moved to the top-left (`App.css`); the new buildings
+  toggle stacks directly below the alerts toggle on the top-right
+  (`top: 54px`) so all three now have distinct positions.
+- **Auto-unmark abandoned acquisitions** - `AcquisitionPanel.tsx` now
+  calls the existing `unmark` endpoint automatically (via an effect
+  cleanup keyed on `fireId`, reading the latest status through a ref) any
+  time the component unmounts or the fire changes while status is
+  `'marked'` and `confirmed_at` is still null - i.e. a draft that was
+  never confirmed. Anything already confirmed (`processing`/`complete`/
+  `failed`) is left untouched; those are real submitted jobs, not drafts.
+- **Clear "no post-ignition imagery yet" message** - when candidate
+  scenes load and *every* after-side scene has zero AOI coverage (a real,
+  increasingly common case for very recently discovered fires, since
+  Sentinel-1 revisits every ~6-12 days per track), the track/scene picker
+  is now replaced with a plain explanatory message instead of presenting
+  a picker with an unfillable "after" column.
+- **Better processing-time estimates** - replaced the flat, inaccurate
+  "Composite mode typically takes 1-3 hours" line with a
+  `processingEstimate()` helper keyed on actual mode: Single-pair
+  (measured, ~45-100 min end-to-end, based on real ~20-50min/scene RTC
+  runs on the current 8vCPU job def) vs. Composite (reasoned, not yet
+  measured directly - ~2.5-4 hours, extrapolated from 3x the scene count
+  through the same RTC bottleneck). Both explicitly flagged in the UI
+  copy as measured vs. estimated so the honesty distinction carries
+  through to the user, not just internally.

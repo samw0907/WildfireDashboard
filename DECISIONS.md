@@ -819,6 +819,61 @@ inconsistent with the fixed 2.9 dB threshold's expected behavior), that's
 the signal to actually dig into SNAP version differences rather than
 assume the pipeline logic itself is broken.
 
+## Multi-acquisition support: single-slot columns → real history table (2026-08-01)
+The original acquisition workflow (see "Mark-for-acquisition implementation
+details" and "SAR compute dispatch" above) stored acquisition state as
+mutable columns directly on `Fire` (`acquisition_status`,
+`acquisition_before_scenes`, `acquisition_result`, etc.) - deliberately
+simple, since only one acquisition was ever expected per fire. That
+assumption broke in practice: a fire can legitimately need re-acquiring
+(a better after-scene becomes available later, conditions change, an
+earlier run used degraded coverage). Raised as an open question on
+2026-07-31, deferred, then actually designed and built on 2026-08-01 once
+prioritized.
+
+**Data model**: new `acquisitions` table, one row per attempt, keyed by
+`fire_id` + `sequence` (1-indexed, creation order) rather than by
+timestamp - sequence numbers are what tabs are labeled/keyed by in the
+UI, and don't shift if clocks or timezones ever get weird. A migration
+(`5e6f2ea48eea`) preserves any existing single acquisition per fire as
+sequence=1 before dropping the old columns. Status is no longer nullable
+- a row's mere existence now means "at least marked," and an abandoned,
+never-confirmed draft is *deleted* outright (not reset to nulls) rather
+than kept around empty, matching the frontend's existing auto-unmark
+behavior. Only one non-terminal acquisition (`marked` or `processing`)
+is allowed per fire at a time (enforced server-side in
+`create_acquisition`) - avoids the ambiguity of two drafts in flight, and
+guards against submitting the same fire's compute job twice concurrently.
+
+**S3 layout changed to match**: results move from
+`acquisitions/{fire_id}/{filename}` to
+`acquisitions/{fire_id}/{sequence}/{filename}` - the old flat layout would
+have silently overwritten an earlier acquisition's results the moment a
+second one ran on the same fire. `ACQUISITION_SEQUENCE` is now a required
+env var alongside `FIRE_ID` on the Batch job (see `batch.py`,
+`entrypoint.py`).
+
+**Retrigger behavior — fully fresh pick, not pre-filled**: discussed two
+options for what happens when starting a new acquisition on a fire that
+already has one - (a) fully fresh scene picker every time, vs. (b)
+pre-filling the previous acquisition's before-scenes as a default
+baseline. Went with (a): every acquisition is picked from scratch, no
+scene selection carried forward automatically. What *is* carried
+forward is visibility, not defaults - the candidates endpoint now
+annotates every scene with `previously_used` (which of this fire's own
+prior acquisitions, if any, already selected it, as before-ignition or
+after-ignition, and that acquisition's own status), so a human doing the
+picking can see "already used in Acquisition #1" and deliberately reuse
+or avoid it, rather than the system silently deciding for them.
+
+**UI**: `AcquisitionPanel` is now a tab strip (one tab per past
+acquisition, labeled "Acquisition #N" plus a before→after date-range
+subtitle once scenes are picked, plus a status badge) with a "+ New" tab
+that's disabled while any acquisition is non-terminal. Scene-picker
+labels changed from generic "Before"/"After" to "Before ignition"/"After
+ignition" throughout, since "before/after" alone was ambiguous about
+before/after *what*.
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands

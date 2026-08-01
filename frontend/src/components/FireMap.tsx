@@ -27,6 +27,13 @@ interface FireMapProps {
   // picking acquisition scenes. Outline only, not filled, since a full IW
   // swath is ~250km wide and would otherwise dominate the view.
   sceneFootprints?: { before?: GeoJSON.Geometry[]; after?: GeoJSON.Geometry[] }
+  // True once acquisition scenes have been confirmed (job submitted or
+  // beyond) rather than still being picked. Scene footprints are most
+  // useful during picking itself - once confirmed, this drives a one-time
+  // auto-hide of the footprints layer and a re-fit back to just the fire
+  // perimeter, without removing the user's ability to toggle footprints
+  // back on manually afterward.
+  scenesConfirmed?: boolean
   // SAR compute results once a job completes - both already reprojected
   // to EPSG:4326 by the pipeline. burnPerimeter is null both before
   // completion and when no burn area was detected at all (a real outcome).
@@ -34,6 +41,12 @@ interface FireMapProps {
     burnPerimeter?: GeoJSON.FeatureCollection | null
     buildingDamage?: GeoJSON.FeatureCollection | null
   }
+  // Real OSM building footprints within the fire's 2,400m exposure buffer
+  // (the same cache the building-count stat cards already use) - shown as
+  // a single consistent color rather than per-band, since position
+  // relative to the already-drawn buffer rings already tells you which
+  // band a building falls in.
+  buildings?: GeoJSON.FeatureCollection | null
 }
 
 const SOURCE_ID = 'fires'
@@ -66,6 +79,12 @@ const DAMAGE_CLASS_COLORS: Record<string, string> = {
   no_data: '#9ca3af',
   geometry_limited: '#6b7280',
 }
+const BUILDINGS_SOURCE_ID = 'buildings'
+// Slate blue-gray - distinct from every other hue family already in use
+// here (warm fire/buffer gradient, violet alerts, blue/cyan scenes, dark
+// maroon burn area, red/orange/green/gray SAR damage classes), so plain
+// "buildings near this fire" reads as its own, neutral kind of thing.
+const BUILDINGS_COLOR = '#475569'
 
 // Outward heat gradient: the closest buffer is most urgent (red, matching
 // the perimeter's own red outline), fading to yellow at the widest band -
@@ -113,7 +132,9 @@ export function FireMap({
   enableAlerts,
   alertsDefaultVisible = true,
   sceneFootprints,
+  scenesConfirmed,
   sarResults,
+  buildings,
 }: FireMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
@@ -122,6 +143,12 @@ export function FireMap({
 
   const [alerts, setAlerts] = useState<GeoJSON.FeatureCollection | null>(null)
   const [alertsVisible, setAlertsVisible] = useState(alertsDefaultVisible)
+  const [buildingsVisible, setBuildingsVisible] = useState(true)
+  const [sceneFootprintsVisible, setSceneFootprintsVisible] = useState(true)
+  // Tracks whether we've already reacted to a false->true scenesConfirmed
+  // transition, so a later manual re-toggle by the user isn't immediately
+  // fought by this effect running again on some unrelated re-render.
+  const wasScenesConfirmedRef = useRef(false)
 
   useEffect(() => {
     if (!enableAlerts) return
@@ -246,6 +273,28 @@ export function FireMap({
         })
       }
 
+      // Real building footprints, on top of the buffer rings so individual
+      // buildings stay legible - position relative to the rings already
+      // underneath tells you which band a given building falls in, which is
+      // why this uses one flat color instead of a per-band scheme. Default
+      // visibility set explicitly here for the same isStyleLoaded() race
+      // reason as the alerts layer above.
+      map.addSource(BUILDINGS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: `${BUILDINGS_SOURCE_ID}-fill`,
+        type: 'fill',
+        source: BUILDINGS_SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: { 'fill-color': BUILDINGS_COLOR, 'fill-opacity': 0.55 },
+      })
+      map.addLayer({
+        id: `${BUILDINGS_SOURCE_ID}-line`,
+        type: 'line',
+        source: BUILDINGS_SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: { 'line-color': BUILDINGS_COLOR, 'line-width': 1 },
+      })
+
       // promoteId lets feature-state key off our own string fire id
       // (MapLibre feature-state needs a numeric or string feature id, and
       // GeoJSON features here don't have a top-level `id` otherwise).
@@ -357,6 +406,8 @@ export function FireMap({
       burnSource?.setData(sarResults?.burnPerimeter ?? { type: 'FeatureCollection', features: [] })
       const damageSource = map.getSource(BUILDING_DAMAGE_SOURCE_ID) as GeoJSONSource | undefined
       damageSource?.setData(sarResults?.buildingDamage ?? { type: 'FeatureCollection', features: [] })
+      const buildingsSource = map.getSource(BUILDINGS_SOURCE_ID) as GeoJSONSource | undefined
+      buildingsSource?.setData(buildings ?? { type: 'FeatureCollection', features: [] })
 
       if (fitToSelection && selectedFireId) {
         const selected = fires.find((f) => f.id === selectedFireId)
@@ -364,8 +415,14 @@ export function FireMap({
         // A selected scene's real footprint (~250km swath) is easy to miss
         // entirely at the fire's own zoom level - widen the fit to include
         // it so the boundary is actually visible, not just present in data.
-        for (const geom of sceneFootprints?.before ?? []) coords = coords.concat(flattenCoords(geom))
-        for (const geom of sceneFootprints?.after ?? []) coords = coords.concat(flattenCoords(geom))
+        // Only while the footprints layer is actually visible though - once
+        // scenes are confirmed and the layer auto-hides, the fit should
+        // snap back to just the fire perimeter rather than staying zoomed
+        // out to a swath that's no longer even shown.
+        if (sceneFootprintsVisible) {
+          for (const geom of sceneFootprints?.before ?? []) coords = coords.concat(flattenCoords(geom))
+          for (const geom of sceneFootprints?.after ?? []) coords = coords.concat(flattenCoords(geom))
+        }
         if (coords.length) {
           const lons = coords.map((c) => c[0])
           const lats = coords.map((c) => c[1])
@@ -385,7 +442,7 @@ export function FireMap({
     } else {
       map.once('load', updateData)
     }
-  }, [fires, selectedFireId, fitToSelection, buffers, alerts, sceneFootprints, sarResults])
+  }, [fires, selectedFireId, fitToSelection, buffers, alerts, sceneFootprints, sceneFootprintsVisible, sarResults, buildings])
 
   useEffect(() => {
     const map = mapRef.current
@@ -394,6 +451,38 @@ export function FireMap({
     if (map.getLayer(ALERTS_FILL_LAYER_ID)) map.setLayoutProperty(ALERTS_FILL_LAYER_ID, 'visibility', visibility)
     if (map.getLayer(ALERTS_LINE_LAYER_ID)) map.setLayoutProperty(ALERTS_LINE_LAYER_ID, 'visibility', visibility)
   }, [alertsVisible])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const visibility = buildingsVisible ? 'visible' : 'none'
+    const fillId = `${BUILDINGS_SOURCE_ID}-fill`
+    const lineId = `${BUILDINGS_SOURCE_ID}-line`
+    if (map.getLayer(fillId)) map.setLayoutProperty(fillId, 'visibility', visibility)
+    if (map.getLayer(lineId)) map.setLayoutProperty(lineId, 'visibility', visibility)
+  }, [buildingsVisible])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !map.isStyleLoaded()) return
+    const visibility = sceneFootprintsVisible ? 'visible' : 'none'
+    const beforeId = `${SCENE_BEFORE_SOURCE_ID}-line`
+    const afterId = `${SCENE_AFTER_SOURCE_ID}-line`
+    if (map.getLayer(beforeId)) map.setLayoutProperty(beforeId, 'visibility', visibility)
+    if (map.getLayer(afterId)) map.setLayoutProperty(afterId, 'visibility', visibility)
+  }, [sceneFootprintsVisible])
+
+  // One-time auto-collapse: the moment scenesConfirmed flips from false to
+  // true (scenes just confirmed, or an already-confirmed fire just
+  // loaded), hide the footprints layer by default. Guarded by the ref so
+  // this doesn't re-fire and fight a manual re-toggle on later re-renders
+  // while scenesConfirmed stays true.
+  useEffect(() => {
+    if (scenesConfirmed && !wasScenesConfirmedRef.current) {
+      setSceneFootprintsVisible(false)
+    }
+    wasScenesConfirmedRef.current = !!scenesConfirmed
+  }, [scenesConfirmed])
 
   return (
     <div className="fire-map-container">
@@ -405,6 +494,29 @@ export function FireMap({
         >
           <input type="checkbox" checked={alertsVisible} onChange={(e) => setAlertsVisible(e.target.checked)} />
           Red Flag Warnings ({alerts.features.length})
+        </label>
+      )}
+      {buildings && buildings.features.length > 0 && (
+        <label className="buildings-toggle" title="Real OSM building footprints within this fire's exposure buffer.">
+          <input
+            type="checkbox"
+            checked={buildingsVisible}
+            onChange={(e) => setBuildingsVisible(e.target.checked)}
+          />
+          Buildings ({buildings.features.length})
+        </label>
+      )}
+      {((sceneFootprints?.before?.length ?? 0) > 0 || (sceneFootprints?.after?.length ?? 0) > 0) && (
+        <label
+          className="scene-footprints-toggle"
+          title="Real Sentinel-1 scene footprints used for this acquisition. Hidden by default once scenes are confirmed, since they matter most during scene selection - toggle back on any time to see coverage again."
+        >
+          <input
+            type="checkbox"
+            checked={sceneFootprintsVisible}
+            onChange={(e) => setSceneFootprintsVisible(e.target.checked)}
+          />
+          Scene footprints
         </label>
       )}
     </div>

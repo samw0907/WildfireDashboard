@@ -422,6 +422,45 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
+/* Stacks directly below .alerts-toggle (top: 12px + ~34px height + 8px gap)
+   so both toggles can be present on the same map without overlapping. */
+.buildings-toggle {
+  position: absolute;
+  top: 54px;
+  right: 12px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Stacks below .buildings-toggle in the same top-right column. */
+.scene-footprints-toggle {
+  position: absolute;
+  top: 96px;
+  right: 12px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
 .maplibregl-popup-content {
   background: var(--bg-elevated);
   color: var(--text);
@@ -777,7 +816,7 @@
 .wind-indicator {
   position: absolute;
   top: 12px;
-  right: 12px;
+  left: 12px;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -939,6 +978,84 @@
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
+}
+
+.acquisition-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.acquisition-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.acquisition-tab--active {
+  border-color: var(--accent-orange);
+  background: rgba(249, 115, 22, 0.12);
+}
+
+.acquisition-tab--new {
+  color: var(--text-muted);
+  align-items: center;
+  justify-content: center;
+}
+
+.acquisition-tab--new:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.acquisition-tab-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 600;
+}
+
+.acquisition-tab-sub {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.acquisition-tab-status {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.acquisition-tab-status--marked {
+  color: var(--text-muted);
+}
+
+.acquisition-tab-status--processing {
+  color: var(--accent-yellow);
+}
+
+.acquisition-tab-status--complete {
+  color: var(--accent-green);
+}
+
+.acquisition-tab-status--failed {
+  color: var(--accent-red);
+}
+
+.scene-prior-use {
+  font-size: 10px;
+  color: var(--accent-yellow);
 }
 
 .scene-picker-columns {

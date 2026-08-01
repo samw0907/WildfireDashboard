@@ -10,6 +10,11 @@ human already picked exact scenes via the mark-for-acquisition picker.
 
 Required environment variables:
   FIRE_ID               - the fire this job processes
+  ACQUISITION_SEQUENCE  - which of this fire's acquisitions to process (a
+                          fire can be acquired more than once over its
+                          lifetime) - also what keeps this run's S3
+                          outputs from colliding with any other
+                          acquisition on the same fire.
   WILDFIRE_API_BASE_URL - e.g. https://wildfiredashboard-production.up.railway.app
   CDSE_USER / CDSE_PASSWORD
   S3_BUCKET             - results destination (AWS region/credentials
@@ -50,23 +55,24 @@ def fire_centroid_lonlat(perimeter_geojson: dict) -> tuple[float, float]:
     return centroid.x, centroid.y
 
 
-def fetch_fire_and_acquisition(api_base_url: str, fire_id: str) -> tuple[dict, dict]:
+def fetch_fire_and_acquisition(api_base_url: str, fire_id: str, sequence: int) -> tuple[dict, dict]:
     with httpx.Client(timeout=30.0) as client:
         fire_response = client.get(f"{api_base_url}/api/fires/{fire_id}")
         fire_response.raise_for_status()
-        acquisition_response = client.get(f"{api_base_url}/api/fires/{fire_id}/acquisition")
+        acquisition_response = client.get(f"{api_base_url}/api/fires/{fire_id}/acquisitions/{sequence}")
         acquisition_response.raise_for_status()
     return fire_response.json(), acquisition_response.json()
 
 
 def main() -> None:
     fire_id = os.environ["FIRE_ID"]
+    sequence = int(os.environ["ACQUISITION_SEQUENCE"])
     api_base_url = os.environ["WILDFIRE_API_BASE_URL"]
     s3_bucket = os.environ["S3_BUCKET"]
     aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
 
-    logger.info("Starting SAR compute job for fire %s", fire_id)
-    fire, acquisition = fetch_fire_and_acquisition(api_base_url, fire_id)
+    logger.info("Starting SAR compute job for fire %s, acquisition #%d", fire_id, sequence)
+    fire, acquisition = fetch_fire_and_acquisition(api_base_url, fire_id, sequence)
 
     mode = acquisition["mode"]
     if mode not in ("composite", "single_pair"):
@@ -205,9 +211,9 @@ def main() -> None:
         # {label: filename} for every file actually produced (a missing
         # path, e.g. no burn detected at all, is just omitted rather than
         # included as null) - matches s3_sync's own deterministic
-        # acquisitions/{fire_id}/{filename} key convention exactly, so the
-        # backend/frontend can construct download URLs without needing a
-        # separate manifest fetch.
+        # acquisitions/{fire_id}/{sequence}/{filename} key convention
+        # exactly, so the backend/frontend can construct download URLs
+        # without needing a separate manifest fetch.
         "files": {label: os.path.basename(path) for label, path in sync_files.items() if path},
     }
     summary_path = os.path.join(ANALYSIS_DIR, "result_summary.json")
@@ -218,9 +224,9 @@ def main() -> None:
     # --- Sync results to S3 (summary included last so its own "files" key
     # already reflects everything else being uploaded alongside it) ---
     sync_files["summary"] = summary_path
-    s3_sync.run_sync(fire_id=fire_id, bucket=s3_bucket, region=aws_region, files=sync_files)
+    s3_sync.run_sync(fire_id=fire_id, sequence=sequence, bucket=s3_bucket, region=aws_region, files=sync_files)
 
-    logger.info("SAR compute job complete for fire %s", fire_id)
+    logger.info("SAR compute job complete for fire %s, acquisition #%d", fire_id, sequence)
 
 
 if __name__ == "__main__":
