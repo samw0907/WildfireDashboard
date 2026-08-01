@@ -455,11 +455,16 @@ loop scene picking instead.
         `SAR_METHODOLOGY.md`. Frame-mosaicking (stitching adjacent frames
         from the same track/date into one full-coverage input) logged as a
         genuine future technique, not in scope now.
-  - [ ] **Flagged for a follow-up review pass later** (2026-07-30): user is
-        happy with Phases A/B for now but wants the whole mark-for-
-        acquisition + picker flow re-checked once Phases C-E exist and
-        there's an end-to-end real result to test against - not signed off
-        as final yet, revisit before considering this feature complete.
+  - [x] **Follow-up review pass, flagged 2026-07-30, resolved 2026-08-01**:
+        was a generic placeholder written before Phases C-E existed at all
+        ("come back and recheck the whole flow once it's real") - not a
+        specific known issue. Superseded by what's actually happened since:
+        the picker/footprint flow was fixed multiple times through real
+        use (toggle race condition, multi-acquisition support, auto-hiding
+        footprints on confirm), and the pipeline itself has now run
+        end-to-end for real three times, surfacing and fixing real bugs
+        each time. In substance, already satisfied several times over -
+        closing rather than leaving a stale "not done" marker sitting here.
   - [x] **Phase C — pipeline adaptation** (2026-07-30, written + partially
         verified — **not yet run for real, see caveat below**): new
         `sar-compute/` directory at the repo root (self-contained, own

@@ -160,10 +160,14 @@ def main() -> None:
     adaptive_threshold_db = change_result["adaptive_threshold_db"]
     if adaptive_threshold_db is not None:
         primary_threshold_db = adaptive_threshold_db
-        threshold_label = f"{primary_threshold_db:.2f} dB (adaptive - this fire's own signal)"
+        # Kept short deliberately - this feeds figure titles (figures.py),
+        # which sit in a narrow 3-panel subplot; the fuller explanation
+        # lives in the acquisition panel/Reference page copy instead, not
+        # here, so this string doesn't need to carry it too.
+        threshold_label = f"{primary_threshold_db:.2f} dB (adaptive)"
     else:
         primary_threshold_db = change.THRESHOLD_COMBINED_DB
-        threshold_label = f"{primary_threshold_db:.2f} dB (fixed reference - no adaptive split found)"
+        threshold_label = f"{primary_threshold_db:.2f} dB (fixed)"
 
     damage_counts = buildings_gdf["damage_class"].value_counts().to_dict()
     damage_counts_fixed = buildings_gdf["damage_class_fixed"].value_counts().to_dict()
