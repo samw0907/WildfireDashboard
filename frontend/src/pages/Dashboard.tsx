@@ -7,7 +7,7 @@ import { PageLoading } from '../components/PageLoading'
 import { FireMap } from '../components/FireMap'
 import { FireFilters, EMPTY_FILTERS, applyFilters, type FiltersState } from '../components/FireFilters'
 import { FireTable } from '../components/FireTable'
-import { FlameIcon, AreaIcon, BuildingIcon, PeopleIcon } from '../components/icons'
+import { FlameIcon, AreaIcon, BuildingIcon, PeopleIcon, WarningIcon } from '../components/icons'
 
 function sumBand(fires: Fire[], band: number, field: 'building_count' | 'population_est'): number {
   return fires.reduce((sum, f) => sum + (exposureAtBand(f.exposure, band)?.[field] ?? 0), 0)
@@ -43,6 +43,7 @@ export function Dashboard() {
   const firesWithPopulation = fires
     ? fires.filter((f) => exposureAtBand(f.exposure, 2400)?.population_est != null).length
     : 0
+  const firesInActiveWarning = fires ? fires.filter((f) => f.in_active_fire_weather_warning).length : 0
 
   return (
     <div className="dashboard">
@@ -58,6 +59,12 @@ export function Dashboard() {
               value={Math.round(totalAcres).toLocaleString()}
               accent="orange"
               icon={AreaIcon}
+            />
+            <StatCard
+              label="Under Red Flag Warning"
+              value={firesInActiveWarning}
+              accent="red"
+              icon={WarningIcon}
             />
             <ImpactStatCard
               label="Buildings"

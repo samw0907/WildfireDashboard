@@ -1,13 +1,16 @@
 :root {
   color-scheme: dark;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
 
   --bg: #0a0e14;
   --bg-elevated: #131822;
   --bg-hover: #1b2230;
   --border: #232937;
   --text: #c5cbd6;
-  --text-muted: #7d8698;
+  /* Brightened from #7d8698 - the old value read as too dull/low-contrast
+     against the near-black background for how much secondary/label text
+     (page subtitles, table headers, helper copy) actually uses it. */
+  --text-muted: #a3acbd;
   --text-heading: #f0f2f5;
   --accent-green: #22c55e;
   --accent-green-bg: rgba(34, 197, 94, 0.12);
@@ -23,7 +26,9 @@
   --bg-hover: #eef0f4;
   --border: #e2e5eb;
   --text: #333844;
-  --text-muted: #6b7280;
+  /* Darkened from #6b7280 to match the same readability bump as dark
+     mode's --text-muted, proportionally. */
+  --text-muted: #545b6b;
   --text-heading: #111318;
   --accent-green: #16a34a;
   --accent-green-bg: rgba(22, 163, 74, 0.1);
