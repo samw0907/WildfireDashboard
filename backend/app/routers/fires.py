@@ -82,8 +82,8 @@ def _to_fire_out(
 def list_fires(db: Session = Depends(get_db)):
     fires = db.scalars(select(Fire).order_by(Fire.source_updated.desc())).all()
     exposure_by_fire = _latest_exposure_by_fire(db, [f.id for f in fires])
-    scores = compute_priority_scores(list(fires), exposure_by_fire)
     flagged = fires_in_active_warnings(list(fires), get_cached_alerts())
+    scores = compute_priority_scores(list(fires), exposure_by_fire, flagged)
     return [
         _to_fire_out(f, exposure_by_fire.get(f.id, []), scores.get(f.id, 0.0), f.id in flagged) for f in fires
     ]
@@ -99,8 +99,8 @@ def get_fire(fire_id: str, db: Session = Depends(get_db)):
     # priority.py), so this needs every fire's data, not just this one's.
     all_fires = db.scalars(select(Fire)).all()
     exposure_by_fire = _latest_exposure_by_fire(db, [f.id for f in all_fires])
-    scores = compute_priority_scores(list(all_fires), exposure_by_fire)
-    flagged = fires_in_active_warnings([fire], get_cached_alerts())
+    flagged = fires_in_active_warnings(list(all_fires), get_cached_alerts())
+    scores = compute_priority_scores(list(all_fires), exposure_by_fire, flagged)
 
     cache = db.get(BuildingCache, fire_id)
     buffers = {str(band): mapping(geo.buffer_meters(fire.perimeter, band)) for band in MAP_BUFFER_BANDS}

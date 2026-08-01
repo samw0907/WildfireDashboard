@@ -1,19 +1,43 @@
 """Priority-fire scoring: identifies which fires are worth flagging for
 follow-up SAR acquisition, for emergency-response/insurance audiences.
 
-See DECISIONS.md for the full reasoning - short version: the score has two
-equally-weighted pillars, not one:
-  - Exposure (buildings + population) - what's at risk if the fire reaches
-    it. Closer bands count for more than distant ones.
-  - Scale (fire size, log-transformed) - how real/active a going concern
-    the fire itself is. Added after live testing showed a 6-acre fire
-    outranking fires 1000x larger purely because it happened to sit in a
-    dense area - a small, likely-more-controllable fire's building count
-    is largely an artifact of location, not actual danger, so exposure
-    alone isn't sufficient; fire size needs to temper it.
-Both normalized against the current fire list (not a fixed scale), since
-the point is picking today's top candidates, not tracking a score over
-time.
+See DECISIONS.md for the full reasoning - short version, four components:
+  - Exposure (20 building + 20 population, was 25/25) - what's at risk if
+    the fire reaches it. Reduced from 25/25 (2026-08-01) because
+    population is now itself building-weighted (dasymetric redistribution,
+    see exposure.py) - the two are no longer as independent as they used
+    to be, so their combined weight was trimmed to reflect that.
+  - Scale (40, fire size log-transformed) - how real/active a going
+    concern the fire itself is. Added after live testing showed a 6-acre
+    fire outranking fires 1000x larger purely because it happened to sit
+    in a dense area - a small, likely-more-controllable fire's building
+    count is largely an artifact of location, not actual danger.
+  - Containment (20, new 2026-08-01) - an uncontained fire is a bigger
+    ongoing concern than a mostly-contained one of similar size/exposure,
+    since it's still actively threatening damage that hasn't happened
+    yet. Missing NIFC data defaults to 0% contained (maximum urgency
+    contribution) - deliberately the same "don't understate risk from a
+    data gap" bias already used elsewhere in this project, not a neutral
+    guess.
+  - Red Flag Warning bonus (+5, new 2026-08-01) - NWS's own designation
+    that current wind/humidity/dryness favor rapid spread. Deliberately
+    NOT also scoring raw wind speed/rain forecast here - wind direction
+    relative to exposure matters more than speed alone (real geometry
+    this doesn't have), a forecast is a prediction not a current
+    condition, and fully modeling fire weather risk is a genuine research
+    problem (same category already ruled out of scope for orbit
+    selection), not something a simple additive term can honestly claim.
+  Deliberately NOT scoring NIMS incident complexity type (1-5) alongside
+  these - it's largely a categorical restatement of fire scale (already
+  captured via acreage), and adding it as a second scored input risked
+  exactly the same double-counting mistake being corrected in exposure
+  above. Still shown as its own badge, just not folded into the score.
+Exposure/scale/containment are all normalized/scaled against the current
+fire list or a natural 0-100 basis (not a fixed absolute scale), since the
+point is picking today's top candidates, not tracking a score over time.
+Final score is capped at 100 (the RFW bonus can occasionally push a
+fire that's already maxed on every other component past the nominal
+0-100 range otherwise).
 """
 
 import math
@@ -23,6 +47,7 @@ from .models import ExposureStat, Fire
 # Closer bands weighted higher - matches how both insurance (direct loss)
 # and emergency response (immediate danger) would naturally weight exposure.
 BAND_WEIGHTS = {0: 4, 500: 3, 1000: 2, 2400: 1}
+RFW_BONUS = 5.0
 
 
 def _weighted_index(exposure: list[ExposureStat], attr: str) -> float:
@@ -48,9 +73,16 @@ def _acreage_index(acres: float | None) -> float:
     return math.log(1 + acres)
 
 
-def compute_priority_scores(fires: list[Fire], exposure_by_fire: dict[str, list[ExposureStat]]) -> dict[str, float]:
-    """Returns a 0-100 score per fire_id: up to 50 points from exposure
-    (25 building + 25 population), up to 50 points from fire scale."""
+def compute_priority_scores(
+    fires: list[Fire], exposure_by_fire: dict[str, list[ExposureStat]], fires_in_warning: set[str]
+) -> dict[str, float]:
+    """Returns a 0-100 score per fire_id: up to 20 points each from
+    building/population exposure, up to 40 from fire scale, up to 20 from
+    containment (inverted - less contained scores higher), plus a flat +5
+    if the fire currently sits in an active NWS fire-weather warning zone.
+    `fires_in_warning` is the fire_id set already computed by
+    nws.fires_in_active_warnings() - not recomputed here, to avoid a
+    second pass over the same alert-zone geometry."""
     building_indices = {f.id: _weighted_index(exposure_by_fire.get(f.id, []), "building_count") for f in fires}
     population_indices = {
         f.id: _weighted_index(exposure_by_fire.get(f.id, []), "population_est") for f in fires
@@ -63,9 +95,17 @@ def compute_priority_scores(fires: list[Fire], exposure_by_fire: dict[str, list[
 
     scores = {}
     for f in fires:
-        exposure_component = 25 * (building_indices[f.id] / max_building) + 25 * (
+        exposure_component = 20 * (building_indices[f.id] / max_building) + 20 * (
             population_indices[f.id] / max_population
         )
-        scale_component = 50 * (acreage_indices[f.id] / max_acreage)
-        scores[f.id] = round(exposure_component + scale_component, 1)
+        scale_component = 40 * (acreage_indices[f.id] / max_acreage)
+        # Missing percent_contained defaults to 0% (fully uncontained,
+        # maximum urgency contribution) - a real NIFC data gap should
+        # never quietly downrank a fire that might still be very active.
+        containment_pct = f.percent_contained if f.percent_contained is not None else 0
+        containment_component = 20 * (1 - containment_pct / 100)
+        rfw_bonus = RFW_BONUS if f.id in fires_in_warning else 0.0
+        scores[f.id] = round(
+            min(100.0, exposure_component + scale_component + containment_component + rfw_bonus), 1
+        )
     return scores

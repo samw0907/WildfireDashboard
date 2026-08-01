@@ -17,9 +17,17 @@ from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
 TIGERWEB_URL = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/1/query"
-ACS_URL = "https://api.census.gov/data/2022/acs/acs5"
-# ACS 5-year vintage - verify this is still the most recent available
-# vintage if population numbers start looking stale.
+# Bumped from 2022 to 2024 (2026-08-01) - confirmed live that the 2024
+# vintage is published (real dataset metadata, not just a placeholder:
+# https://api.census.gov/data/2024/acs/acs5.json returns c_vintage: 2024).
+# Couldn't verify actual row-level data completeness without a real
+# CENSUS_API_KEY (metadata endpoints are public, data endpoints aren't),
+# but this is low-risk either way - the existing graceful-degrade-on-
+# failure logic below just leaves population_est null for a cycle if a
+# vintage turns out to be incomplete, same as any other Census API
+# failure. Verify this is still the most recent available vintage again
+# if population numbers start looking stale.
+ACS_URL = "https://api.census.gov/data/2024/acs/acs5"
 POPULATION_VARIABLE = "B01003_001E"  # total population
 
 

@@ -879,3 +879,61 @@ elsewhere within that same polygon.
       a specific fire via the existing `POST /api/fires/{id}/recompute`
       (their own `RECOMPUTE_API_KEY`, never seen by this session) to
       verify the exact fire that surfaced the original bug.
+
+## ACS vintage bump + priority score redesign (2026-08-01)
+Prompted by a broader "are there other similar methodology issues" review
+requested after the population fix above - two real findings, both acted
+on together:
+- [x] **Census ACS vintage bumped from 2022 to 2024** - had been silently
+      hardcoded and never revisited. Confirmed live that the 2024 vintage
+      is genuinely published (real dataset metadata at
+      `api.census.gov/data/2024/acs/acs5.json`, not just a placeholder -
+      couldn't verify actual row-level data without a real
+      `CENSUS_API_KEY`, since only metadata endpoints are public). Low
+      risk either way: the existing graceful-degrade logic already leaves
+      `population_est` null for a cycle on any Census API failure, so an
+      incomplete vintage would fail the same safe way, not silently.
+- [x] **Priority score reweighted, from 25/25/50 to 20/20/40, plus two
+      new components** - discussed and agreed before building:
+      - **Exposure cut from 25/25 to 20/20** (building/population) -
+        population is now itself building-weighted (see the dasymetric
+        change above), so the two are no longer as independent a pair of
+        signals as they were - reduced combined weight reflects that
+        rather than silently double-counting.
+      - **Containment added (up to 20 pts, inverted)** - `20 × (1 -
+        percent_contained/100)`, so an uncontained fire scores higher
+        than an equally-sized contained one, matching the "uncontained =
+        bigger ongoing concern" reasoning already logged back when this
+        was first floated (2026-07-29) as a future refinement needing a
+        null-handling strategy. Missing `percent_contained` now
+        deliberately defaults to 0% (fully uncontained, maximum urgency)
+        - the same "don't understate risk from a data gap" bias already
+        used elsewhere in this project, not a neutral guess.
+      - **Red Flag Warning bonus added (+5 flat)** - reuses the RFW zone
+        check already computed for the per-fire badge
+        (`fires_in_active_warnings`), now passed into
+        `compute_priority_scores` too instead of being computed twice.
+      - **Deliberately NOT added**: NIMS incident complexity type (1-5) -
+        judged too redundant with the acreage/scale component already
+        present (both are largely proxies for "how big/serious," and
+        adding complexity as a second scored input risked the exact
+        double-counting mistake being corrected in exposure above). Still
+        shown as its own badge, just not folded into the score.
+      - **Deliberately NOT added**: raw wind speed or rain forecast -
+        discussed and rejected: wind *direction* relative to exposure
+        matters more than speed alone (real geometry this tool doesn't
+        compute), a forecast is a prediction not a current condition, and
+        properly modeling fire-weather risk is a genuine research problem
+        (same category already ruled out of scope for orbit selection),
+        not something an additive score term can honestly approximate.
+      - **Final score capped at 100** - the RFW bonus can occasionally
+        push an already-maxed fire past the nominal range otherwise.
+      - **Verified with synthetic fires before shipping** (isolated each
+        component in turn): confirmed containment 0%-vs-100% produces
+        exactly a 20-point gap at equal acreage; `None` containment
+        behaves identically to 0%; the RFW bonus adds exactly +5; a
+        maxed-out fire with an RFW bonus correctly caps at 100.0, not
+        105.0.
+      - Reference page's priority-score section rewritten to describe the
+        new formula and explain both "why cut exposure" and "why these
+        two things were deliberately left out," not just the new numbers.

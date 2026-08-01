@@ -236,17 +236,46 @@ export function Reference() {
         <h2>How the priority score works</h2>
         <ParamChips
           params={[
-            { label: 'Exposure weight', value: '50 pts' },
-            { label: 'Fire-scale weight', value: '50 pts' },
+            { label: 'Exposure weight', value: '40 pts' },
+            { label: 'Fire-scale weight', value: '40 pts' },
+            { label: 'Containment weight', value: '20 pts' },
+            { label: 'Red Flag bonus', value: '+5 pts' },
             { label: 'Band weighting', value: '4 : 3 : 2 : 1' },
           ]}
         />
         <p>
-          Each tracked fire gets a 0-100 score from two equally-weighted pillars:{' '}
-          <strong>exposure</strong> (up to 50 points: buildings + population, weighted 4/3/2/1
-          across the perimeter/500m/1,000m/2,400m bands so closer, more-certain exposure counts
-          for more) and <strong>fire scale</strong> (up to 50 points, log-transformed acreage, so
-          one outlier-huge fire doesn't dominate the scale). Both are normalized against the{' '}
+          Each tracked fire gets a 0-100 score from four components: <strong>exposure</strong> (up
+          to 40 points: 20 building + 20 population, weighted 4/3/2/1 across the perimeter/500m/
+          1,000m/2,400m bands so closer, more-certain exposure counts for more), <strong>fire
+          scale</strong> (up to 40 points, log-transformed acreage, so one outlier-huge fire
+          doesn't dominate the scale), <strong>containment</strong> (up to 20 points, inverted - a
+          0%-contained fire scores the full 20, a fully-contained one scores 0 - an uncontained
+          fire is a bigger ongoing concern than a similarly-sized contained one, since it's still
+          actively threatening damage that hasn't happened yet), and a flat{' '}
+          <strong>+5 bonus</strong> if the fire currently sits in an active NWS Red Flag Warning /
+          Fire Weather Watch zone. Missing containment data defaults to 0% (fully uncontained,
+          maximum urgency) rather than a neutral guess or excluding the fire - a real NIFC data gap
+          shouldn't quietly downrank a fire that might still be very active. The total is capped at
+          100 (the Red Flag bonus can occasionally push an already-maxed fire past the nominal
+          range otherwise).
+        </p>
+        <p>
+          Exposure was reduced from 25/25 to 20/20 points (2026-08-01) specifically because
+          population is now itself computed from local building density (see{' '}
+          <a href="#population-methodology">above</a>) - the two are no longer as independent a
+          pair of signals as they used to be, so their combined weight was trimmed to reflect that,
+          rather than silently double-counting the same underlying signal at full strength.
+          Deliberately <strong>not</strong> scored: NIMS incident complexity type (1-5, still shown
+          as its own badge) - it's largely a categorical restatement of fire scale already captured
+          via acreage, and folding it in as a second scored input risked the same double-counting
+          problem being corrected in exposure. Also deliberately excluded: raw wind speed or rain
+          forecast - wind direction relative to exposure matters more than speed alone (real
+          geometry this tool doesn't compute), a forecast is a prediction rather than a current
+          condition, and fully modeling fire-weather risk is a genuine research problem on its own,
+          not something a simple additive score term can honestly claim to approximate.
+        </p>
+        <p>
+          Exposure/scale/containment are all normalized or scaled against the{' '}
           <em>current</em> fire list, not a fixed scale - this is a same-day relative ranking tool
           for picking today's top candidates, not an absolute or portable risk certification. A
           score of 50 today and a score of 50 next week don't necessarily represent the same
