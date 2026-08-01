@@ -732,15 +732,45 @@ export function AcquisitionPanel({
                         accent="green"
                         icon={BuildingIcon}
                       />
+                      {result.confidence_counts && (
+                        <StatCard
+                          label="Threshold-sensitive"
+                          value={result.confidence_counts.uncertain ?? 0}
+                          accent="yellow"
+                          icon={BuildingIcon}
+                        />
+                      )}
                     </div>
                     <p className="acquisition-minor-stats">
-                      {result.total_burn_area_ha.toFixed(1)} ha burn area detected
-                      {burnAreaPercentOfFire(result.total_burn_area_ha, fireAcres) != null &&
-                        ` (${burnAreaPercentOfFire(result.total_burn_area_ha, fireAcres)}% of reported fire acreage)`}{' '}
-                      across {result.burn_patch_count} patches · {result.total_buildings_classified} buildings
+                      {burnAreaPercentOfFire(result.total_burn_area_ha, fireAcres) != null && (
+                        <strong>Perimeter match: {burnAreaPercentOfFire(result.total_burn_area_ha, fireAcres)}% </strong>
+                      )}
+                      {result.total_burn_area_ha.toFixed(1)} ha SAR-detected burn area
+                      {burnAreaPercentOfFire(result.total_burn_area_ha, fireAcres) != null && ' of reported fire acreage'}
+                      {' '}across {result.burn_patch_count} patches · {result.total_buildings_classified} buildings
                       assessed
                       {excluded > 0 && ` · ${excluded} excluded (no data / geometry-limited)`}
                     </p>
+                    {result.adaptive_threshold_db != null && result.confidence_counts && (
+                      <p className="acquisition-minor-stats">
+                        Cross-checked against a second, adaptive threshold derived from this fire's own signal
+                        (<strong>{result.adaptive_threshold_db.toFixed(2)} dB</strong>, vs. the fixed{' '}
+                        <strong>{result.threshold_db} dB</strong> default): {result.confidence_counts.corroborated ?? 0}{' '}
+                        buildings agree under both methods
+                        {(result.confidence_counts.uncertain ?? 0) > 0 &&
+                          `; ${result.confidence_counts.uncertain} are threshold-sensitive (classified differently
+                          depending on which threshold is used) - shown above, not asserted as either answer`}
+                        .
+                      </p>
+                    )}
+                    {(counts.unconfirmed ?? 0) > 0 && (
+                      <p className="acquisition-minor-stats">
+                        {counts.unconfirmed} building{counts.unconfirmed === 1 ? '' : 's'} had an initial destroyed/
+                        possibly-affected reading, but weren't backed by a real, spatially-coherent burn patch (likely
+                        a single noisy pixel rather than a real finding) - excluded from the counts above rather than
+                        trusted on that one pixel alone.
+                      </p>
+                    )}
                     <p className="acquisition-honesty-note">
                       Fixed {result.threshold_db} dB change threshold, OpenStreetMap building data - both have real
                       limitations for a live response.{' '}

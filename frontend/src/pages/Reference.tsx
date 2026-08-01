@@ -313,14 +313,24 @@ export function Reference() {
         </p>
         <PipelineDiagram steps={SAR_PIPELINE_STEPS} />
         <ParamChips params={SAR_PARAMS} />
+        <p>
+          <strong>Every building is classified against two thresholds, not one.</strong> The fixed
+          value shown above is applied identically to every fire, which makes results comparable
+          across fires but was never tuned for any specific one. Alongside it, each fire also gets
+          an <em>adaptive</em> threshold - computed automatically from that fire's own change-image
+          statistics (Otsu's method, a standard unsupervised technique that needs no ground truth to
+          run). Where a building's classification agrees under both the fixed and the adaptive
+          threshold, that's a corroborated result. Where the two disagree, the building is flagged{' '}
+          <em>threshold-sensitive</em> rather than asserted as either answer - a real, visible signal
+          of exactly which classifications are robust to the threshold choice and which aren't.
+        </p>
         <div className="honesty-warning-card">
           <span aria-hidden="true">⚠️</span>
           <span>
-            Damage classification uses a single fixed change-detection threshold, applied the same
-            way to every fire rather than tuned per-incident, against OpenStreetMap building
-            footprints (see <a href="#known-limitations">known limitations</a> for OSM's own
-            coverage gaps). Real damage-inspection records aren't available in a live response
-            setting to check any individual result against.{' '}
+            Even a corroborated result is still not validated against real damage-inspection
+            records, which aren't available in a live response setting for an arbitrary fire, and is
+            classified against OpenStreetMap building footprints (see{' '}
+            <a href="#known-limitations">known limitations</a> for OSM's own coverage gaps).{' '}
             <strong>Treat every SAR result on this site as a rapid triage signal, not a certified
             damage assessment.</strong>
           </span>

@@ -288,6 +288,11 @@ forward-thinking even though never actually exercised in validation
    essentially a noisy single-pixel read, with no cross-check against a
    spatially coherent damage cluster nearby - a structural asymmetry
    between the two output paths that neither doc calls out.
+   **Resolved 2026-08-01** - see `SAR_PIPELINE_REDESIGN.md` §1.6: MMU
+   raised to 1.0ha, and building classification now checks each positive
+   read against the MMU-surviving patches, downgrading anything not
+   spatially corroborated to a new `unconfirmed` class rather than
+   trusting an isolated pixel.
 5. **No use of interferometric coherence.** This approach uses only
    backscatter *intensity* change. SAR *coherence* (phase-based
    decorrelation between passes) is a genuinely different, sometimes
@@ -499,3 +504,20 @@ this doc. Summary for orientation:
 Also see `DECISIONS.md`'s "SAR compute dispatch — full architecture +
 methodology decisions" entry for the AWS-vs-GEE reasoning and cost
 estimate, which lives there rather than being duplicated in full here.
+
+## 10. Post-first-run methodology hardening (resolved 2026-08-01)
+
+After Phases A-E shipped and produced real first results, a second review
+round (prompted by visual artifacts in the live output, not a scheduled
+step) re-examined despeckling, the MMU constant, thresholding, and the
+building-classification/noise-filter asymmetry flagged in §5 point 4
+above. Full research, comparison, and final decisions live in
+`SAR_PIPELINE_REDESIGN.md` (§0-§3) - not duplicated here. Summary: MMU
+raised 0.1ha→1.0ha, a from-scratch Otsu adaptive threshold now runs
+alongside the fixed one as a per-building confidence signal, building
+classification now requires spatial corroboration against MMU-surviving
+patches (new `unconfirmed` class for uncorroborated positive reads), and
+a cosmetic display-only polygon-smoothing step was added - all
+implemented, image/frontend rebuilt and redeployed. No spatial
+despeckling filter was added; reasoning for that specific non-action is
+in `SAR_PIPELINE_REDESIGN.md` §1.2's final-decision note.

@@ -65,23 +65,107 @@ def extract_mean_change(buildings_gdf: gpd.GeoDataFrame, change_raster_path: str
     return buildings_gdf
 
 
-def classify_damage(buildings_gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Destroyed / possibly_affected / no_damage / no_data, using the
-    fixed thresholds inherited from the original pipeline - NOT
-    independently calibrated for this fire. See SAR_METHODOLOGY.md §1.5/§7."""
-    threshold_low = THRESHOLD_COMBINED_DB * THRESHOLD_LOW_RATIO
+def _assign_class(val: float, threshold_db: float, threshold_low_ratio: float = THRESHOLD_LOW_RATIO) -> str:
+    if val is None or np.isnan(val):
+        return "no_data"
+    if val >= threshold_db:
+        return "destroyed"
+    if val >= threshold_db * threshold_low_ratio:
+        return "possibly_affected"
+    return "no_damage"
 
-    def assign_class(val):
-        if val is None or np.isnan(val):
-            return "no_data"
-        if val >= THRESHOLD_COMBINED_DB:
-            return "destroyed"
-        if val >= threshold_low:
-            return "possibly_affected"
-        return "no_damage"
 
+def classify_damage(buildings_gdf: gpd.GeoDataFrame, adaptive_threshold_db: float | None) -> gpd.GeoDataFrame:
+    """Classifies every building twice: once against the fixed threshold
+    inherited from the original pipeline (NOT independently calibrated for
+    this fire - see SAR_METHODOLOGY.md §1.5/§7), once against an adaptive
+    (Otsu) threshold derived from this fire's own change-image statistics
+    (see change.py's compute_otsu_threshold()). Neither is presented as
+    "the" answer on its own - see apply_spatial_corroboration() and
+    compute_confidence() below for how the two get reconciled. Pure
+    threshold comparison only at this stage, deliberately - no spatial
+    reasoning here yet."""
     buildings_gdf = buildings_gdf.copy()
-    buildings_gdf["damage_class"] = buildings_gdf["mean_change_combined"].apply(assign_class)
+    buildings_gdf["damage_class"] = buildings_gdf["mean_change_combined"].apply(
+        lambda v: _assign_class(v, THRESHOLD_COMBINED_DB)
+    )
+    buildings_gdf["damage_class_adaptive"] = (
+        buildings_gdf["mean_change_combined"].apply(lambda v: _assign_class(v, adaptive_threshold_db))
+        if adaptive_threshold_db is not None
+        else None
+    )
+    return buildings_gdf
+
+
+def apply_spatial_corroboration(buildings_gdf: gpd.GeoDataFrame, burn_gdf: gpd.GeoDataFrame | None) -> gpd.GeoDataFrame:
+    """A building's raw pixel value crossing the fixed threshold isn't
+    itself proof of real damage - a single noisy pixel (speckle, not a
+    real building-scale destruction signal) can cross it too, and at
+    Sentinel-1's ~20m resolution a building is frequently smaller than one
+    pixel to begin with (see SAR_PIPELINE_REDESIGN.md §0/§1.2/§1.6).
+
+    change.py's minimum-mapping-unit filter already separates genuinely
+    spatially-coherent burn patches from small, likely-speckle fragments -
+    but that filter previously only affected the vectorized burn-area
+    output, never building classification, leaving an asymmetry between
+    the two output paths (this was the exact gap named in
+    SAR_METHODOLOGY.md §5 point 4, now closed).
+
+    Any building classified "destroyed" or "possibly_affected" whose
+    footprint doesn't actually intersect one of those MMU-surviving
+    patches gets downgraded to "unconfirmed" - its pixel read crossed the
+    threshold, but there was no spatially-coherent evidence to back that
+    read up, which is exactly the profile of a noisy single pixel rather
+    than a real finding. Only applied to the fixed-threshold classification
+    - the adaptive one stays a plain threshold comparison, since its whole
+    purpose is being an independent cross-check, not a second full
+    corroboration pipeline of its own."""
+    buildings_gdf = buildings_gdf.copy()
+    positive = buildings_gdf["damage_class"].isin(["destroyed", "possibly_affected"])
+    if not positive.any():
+        return buildings_gdf
+
+    if burn_gdf is None or len(burn_gdf) == 0:
+        # No burn patch survived the noise filter anywhere on this fire -
+        # nothing exists to corroborate any positive read against.
+        buildings_gdf.loc[positive, "damage_class"] = "unconfirmed"
+        n_downgraded = int(positive.sum())
+    else:
+        burn_reproj = burn_gdf.to_crs(buildings_gdf.crs)
+        burn_union = burn_reproj.geometry.union_all()
+        corroborated = buildings_gdf.geometry.intersects(burn_union)
+        downgrade = positive & ~corroborated
+        buildings_gdf.loc[downgrade, "damage_class"] = "unconfirmed"
+        n_downgraded = int(downgrade.sum())
+
+    logger.info(
+        "Downgraded %d building(s) to 'unconfirmed' - positive threshold read with no "
+        "spatially-coherent patch to corroborate it",
+        n_downgraded,
+    )
+    return buildings_gdf
+
+
+def compute_confidence(buildings_gdf: gpd.GeoDataFrame, adaptive_threshold_db: float | None) -> gpd.GeoDataFrame:
+    """Runs *after* spatial corroboration, comparing each building's final
+    (possibly-downgraded) fixed classification against the adaptive one -
+    "corroborated" where they agree, "uncertain" (threshold-sensitive)
+    where they don't. `no_data`/`unconfirmed` aren't threshold-agreement
+    questions in the first place (there's nothing to compare, or the
+    positive read was already rejected on spatial grounds), so neither
+    side being one of those makes the comparison itself not applicable
+    rather than a disagreement."""
+    buildings_gdf = buildings_gdf.copy()
+    if adaptive_threshold_db is None:
+        buildings_gdf["confidence"] = "n/a"
+        return buildings_gdf
+
+    not_comparable = {"no_data", "unconfirmed"}
+    both_real = ~buildings_gdf["damage_class"].isin(not_comparable) & ~buildings_gdf["damage_class_adaptive"].isin(
+        not_comparable
+    )
+    agree = buildings_gdf["damage_class"] == buildings_gdf["damage_class_adaptive"]
+    buildings_gdf["confidence"] = np.where(~both_real, "n/a", np.where(agree, "corroborated", "uncertain"))
     return buildings_gdf
 
 
@@ -105,8 +189,16 @@ def flag_geometry_limited(buildings_gdf: gpd.GeoDataFrame, lia_raster_path: str)
     buildings_gdf = buildings_gdf.copy()
     buildings_gdf["mean_lia"] = [s["mean"] if s["mean"] is not None else np.nan for s in lia_stats]
 
-    buildings_gdf.loc[buildings_gdf["mean_lia"] > LIA_THRESHOLD_DEG, "damage_class"] = "geometry_limited"
-    n_flagged = int((buildings_gdf["damage_class"] == "geometry_limited").sum())
+    limited = buildings_gdf["mean_lia"] > LIA_THRESHOLD_DEG
+    # Applied to both classifications, not just the fixed one - unreliable
+    # terrain geometry is a property of the radar/terrain relationship,
+    # independent of which threshold value was used, so both need the
+    # same override. Confidence is reset to n/a too - agreement between
+    # two thresholds means nothing on data already flagged unreliable.
+    buildings_gdf.loc[limited, "damage_class"] = "geometry_limited"
+    buildings_gdf.loc[limited, "damage_class_adaptive"] = "geometry_limited"
+    buildings_gdf.loc[limited, "confidence"] = "n/a"
+    n_flagged = int(limited.sum())
     logger.info("Flagged %d buildings as geometry_limited (LIA > %.0f°)", n_flagged, LIA_THRESHOLD_DEG)
     return buildings_gdf
 
@@ -119,12 +211,24 @@ def run_buildings(
     reference_date: str,
     target_crs: int,
     output_path: str,
+    adaptive_threshold_db: float | None = None,
+    burn_gdf: gpd.GeoDataFrame | None = None,
 ) -> gpd.GeoDataFrame:
     buildings_gdf = fetch_osm_buildings(api_base_url, fire_id, target_crs)
     logger.info("Loaded %d cached OSM buildings for fire %s", len(buildings_gdf), fire_id)
 
     buildings_gdf = extract_mean_change(buildings_gdf, change_raster_path)
-    buildings_gdf = classify_damage(buildings_gdf)
+    # Order matters: classify by threshold first, then require spatial
+    # corroboration for any positive read (may downgrade damage_class to
+    # "unconfirmed"), then compute confidence off the *final* damage_class
+    # - so a building downgraded for lack of corroboration is compared
+    # against the adaptive threshold as "unconfirmed", not as whatever its
+    # original threshold-only read happened to be. geometry_limited runs
+    # last, overriding everything - unreliable terrain data trumps both
+    # threshold comparisons and spatial corroboration alike.
+    buildings_gdf = classify_damage(buildings_gdf, adaptive_threshold_db)
+    buildings_gdf = apply_spatial_corroboration(buildings_gdf, burn_gdf)
+    buildings_gdf = compute_confidence(buildings_gdf, adaptive_threshold_db)
     buildings_gdf["area_m2"] = buildings_gdf.geometry.area
 
     lia_path = find_lia_file(rtc_dir, reference_date)
@@ -134,6 +238,8 @@ def run_buildings(
         logger.warning("No localIncidenceAngle raster found - skipping geometry flagging")
 
     logger.info("Damage classification counts:\n%s", buildings_gdf["damage_class"].value_counts().to_string())
+    if adaptive_threshold_db is not None:
+        logger.info("Confidence counts:\n%s", buildings_gdf["confidence"].value_counts().to_string())
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     # Written in WGS84, not target_crs (the UTM working CRS) - the

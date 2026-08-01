@@ -68,19 +68,34 @@ const SCENE_AFTER_SOURCE_ID = 'scene-after'
 // kind of thing (satellite coverage, not fire risk).
 const SCENE_BEFORE_COLOR = '#2563eb'
 const SCENE_AFTER_COLOR = '#0891b2'
+// Brighter/lighter red - the base NIFC-reported perimeter, one of two
+// reds on the map now that both it and the SAR burn area are toggleable
+// (previously orange, but two different "how much of this fire actually
+// burned per SAR" reds side by side reads more clearly than orange vs.
+// maroon once both can be on screen at once).
+const FIRE_PERIMETER_FILL_COLOR = '#f87171'
 const BURN_PERIMETER_SOURCE_ID = 'sar-burn-perimeter'
-// Dark maroon - deliberately distinct from the fire-perimeter/buffer warm
-// orange-yellow gradient and the blue/cyan scene-footprint outlines, so a
-// SAR-detected burn area reads as its own, more severe kind of thing.
-const BURN_PERIMETER_COLOR = '#7f1d1d'
+// Deep, dark red - deliberately much darker than the lighter NIFC
+// perimeter fill above, so the two are easy to tell apart when both are
+// visible: this one is what SAR actually detected as changed, the other
+// is the officially reported perimeter.
+const BURN_PERIMETER_COLOR = '#450a0a'
 const BUILDING_DAMAGE_SOURCE_ID = 'sar-building-damage'
 // Matches buildings.py's classify_damage()/flag_geometry_limited() classes.
+// Deliberately more saturated/vivid than this map's other color families -
+// these polygons are tiny (real building footprint size against a
+// fire-extent canvas), so anything less than maximum contrast is
+// invisible in practice, not just "a bit dull."
 const DAMAGE_CLASS_COLORS: Record<string, string> = {
-  destroyed: '#dc2626',
-  possibly_affected: '#f97316',
-  no_damage: '#16a34a',
-  no_data: '#9ca3af',
-  geometry_limited: '#6b7280',
+  destroyed: '#ff1a1a',
+  possibly_affected: '#ff9500',
+  no_damage: '#00d95f',
+  no_data: '#b0b0b0',
+  geometry_limited: '#7a7a7a',
+  // A positive threshold read with no spatially-coherent patch backing
+  // it up - muted/brownish rather than vivid red/orange, deliberately:
+  // it *was* flagged, just not trusted the way a corroborated read is.
+  unconfirmed: '#92400e',
 }
 const BUILDINGS_SOURCE_ID = 'buildings'
 // Slate blue-gray - distinct from every other hue family already in use
@@ -148,6 +163,8 @@ export function FireMap({
   const [alertsVisible, setAlertsVisible] = useState(alertsDefaultVisible)
   const [buildingsVisible, setBuildingsVisible] = useState(true)
   const [sceneFootprintsVisible, setSceneFootprintsVisible] = useState(true)
+  const [firePerimeterVisible, setFirePerimeterVisible] = useState(true)
+  const [burnPerimeterVisible, setBurnPerimeterVisible] = useState(true)
   // Tracks whether we've already reacted to a false->true scenesConfirmed
   // transition, so a later manual re-toggle by the user isn't immediately
   // fought by this effect running again on some unrelated re-render.
@@ -274,41 +291,6 @@ export function FireMap({
         paint: { 'line-color': SCENE_AFTER_COLOR, 'line-width': 2, 'line-dasharray': [4, 2] },
       })
 
-      // SAR compute results - added above the buffer bands but below the
-      // fire perimeter itself, so a detected burn area/damaged buildings
-      // read as more prominent than the generic exposure rings.
-      map.addSource(BURN_PERIMETER_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({
-        id: `${BURN_PERIMETER_SOURCE_ID}-fill`,
-        type: 'fill',
-        source: BURN_PERIMETER_SOURCE_ID,
-        paint: { 'fill-color': BURN_PERIMETER_COLOR, 'fill-opacity': 0.4 },
-      })
-      map.addLayer({
-        id: `${BURN_PERIMETER_SOURCE_ID}-line`,
-        type: 'line',
-        source: BURN_PERIMETER_SOURCE_ID,
-        paint: { 'line-color': BURN_PERIMETER_COLOR, 'line-width': 1.5 },
-      })
-      map.addSource(BUILDING_DAMAGE_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({
-        id: `${BUILDING_DAMAGE_SOURCE_ID}-fill`,
-        type: 'fill',
-        source: BUILDING_DAMAGE_SOURCE_ID,
-        paint: {
-          'fill-color': [
-            'match',
-            ['get', 'damage_class'],
-            'destroyed', DAMAGE_CLASS_COLORS.destroyed,
-            'possibly_affected', DAMAGE_CLASS_COLORS.possibly_affected,
-            'no_damage', DAMAGE_CLASS_COLORS.no_damage,
-            'geometry_limited', DAMAGE_CLASS_COLORS.geometry_limited,
-            DAMAGE_CLASS_COLORS.no_data,
-          ],
-          'fill-opacity': 0.75,
-        },
-      })
-
       for (const band of BUFFER_BAND_ORDER) {
         const bandSourceId = `buffer-${band}`
         map.addSource(bandSourceId, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
@@ -331,7 +313,13 @@ export function FireMap({
       // underneath tells you which band a given building falls in, which is
       // why this uses one flat color instead of a per-band scheme. Default
       // visibility set explicitly here for the same isStyleLoaded() race
-      // reason as the alerts layer above.
+      // reason as the alerts layer above. Added *before* the SAR compute
+      // results below (not after) - this generic layer used to be added
+      // later/on top, which meant its semi-opaque gray fill visually muted
+      // the classified-damage colors underneath for every building that
+      // appears in both datasets (i.e. every classified building). Adding
+      // it first means classified damage colors now render on top, full
+      // strength, as intended.
       map.addSource(BUILDINGS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({
         id: `${BUILDINGS_SOURCE_ID}-fill`,
@@ -348,6 +336,59 @@ export function FireMap({
         paint: { 'line-color': BUILDINGS_COLOR, 'line-width': 1 },
       })
 
+      // SAR compute results - added above the buffer bands/generic
+      // buildings but below the fire perimeter itself, so a detected burn
+      // area/damaged buildings read as more prominent than the generic
+      // exposure rings and building layer underneath.
+      map.addSource(BURN_PERIMETER_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: `${BURN_PERIMETER_SOURCE_ID}-fill`,
+        type: 'fill',
+        source: BURN_PERIMETER_SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: { 'fill-color': BURN_PERIMETER_COLOR, 'fill-opacity': 0.4 },
+      })
+      map.addLayer({
+        id: `${BURN_PERIMETER_SOURCE_ID}-line`,
+        type: 'line',
+        source: BURN_PERIMETER_SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: { 'line-color': BURN_PERIMETER_COLOR, 'line-width': 1.5 },
+      })
+      // Classified buildings - bold, fully-opaque, saturated colors and a
+      // dark outline deliberately, not the softer tones used elsewhere on
+      // this map: these polygons are tiny relative to the fire itself (see
+      // SAR_RESULTS_ASSESSMENT.md §3.1), so anything less than maximum
+      // contrast disappears entirely against a busy basemap.
+      map.addSource(BUILDING_DAMAGE_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: `${BUILDING_DAMAGE_SOURCE_ID}-fill`,
+        type: 'fill',
+        source: BUILDING_DAMAGE_SOURCE_ID,
+        paint: {
+          'fill-color': [
+            'match',
+            ['get', 'damage_class'],
+            'destroyed', DAMAGE_CLASS_COLORS.destroyed,
+            'possibly_affected', DAMAGE_CLASS_COLORS.possibly_affected,
+            'no_damage', DAMAGE_CLASS_COLORS.no_damage,
+            'geometry_limited', DAMAGE_CLASS_COLORS.geometry_limited,
+            'unconfirmed', DAMAGE_CLASS_COLORS.unconfirmed,
+            DAMAGE_CLASS_COLORS.no_data,
+          ],
+          'fill-opacity': 1,
+        },
+      })
+      map.addLayer({
+        id: `${BUILDING_DAMAGE_SOURCE_ID}-line`,
+        type: 'line',
+        source: BUILDING_DAMAGE_SOURCE_ID,
+        paint: {
+          'line-color': '#000000',
+          'line-width': 1,
+        },
+      })
+
       // promoteId lets feature-state key off our own string fire id
       // (MapLibre feature-state needs a numeric or string feature id, and
       // GeoJSON features here don't have a top-level `id` otherwise).
@@ -360,12 +401,14 @@ export function FireMap({
         id: FILL_LAYER_ID,
         type: 'fill',
         source: SOURCE_ID,
-        paint: { 'fill-color': '#f97316', 'fill-opacity': 0.35 },
+        layout: { visibility: 'visible' },
+        paint: { 'fill-color': FIRE_PERIMETER_FILL_COLOR, 'fill-opacity': 0.35 },
       })
       map.addLayer({
         id: LINE_LAYER_ID,
         type: 'line',
         source: SOURCE_ID,
+        layout: { visibility: 'visible' },
         paint: {
           'line-color': '#dc2626',
           'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 3.5, 1.5],
@@ -547,6 +590,24 @@ export function FireMap({
     }
   }, [basemap])
 
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const visibility = firePerimeterVisible ? 'visible' : 'none'
+    if (map.getLayer(FILL_LAYER_ID)) map.setLayoutProperty(FILL_LAYER_ID, 'visibility', visibility)
+    if (map.getLayer(LINE_LAYER_ID)) map.setLayoutProperty(LINE_LAYER_ID, 'visibility', visibility)
+  }, [firePerimeterVisible])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const visibility = burnPerimeterVisible ? 'visible' : 'none'
+    const fillId = `${BURN_PERIMETER_SOURCE_ID}-fill`
+    const lineId = `${BURN_PERIMETER_SOURCE_ID}-line`
+    if (map.getLayer(fillId)) map.setLayoutProperty(fillId, 'visibility', visibility)
+    if (map.getLayer(lineId)) map.setLayoutProperty(lineId, 'visibility', visibility)
+  }, [burnPerimeterVisible])
+
   // One-time auto-collapse: the moment scenesConfirmed flips from false to
   // true (scenes just confirmed, or an already-confirmed fire just
   // loaded), hide the footprints layer by default. Guarded by the ref so
@@ -562,6 +623,7 @@ export function FireMap({
   const hasAlertsToggle = !!(enableAlerts && alerts && alerts.features.length > 0)
   const hasBuildingsToggle = !!(buildings && buildings.features.length > 0)
   const hasSceneFootprintsToggle = (sceneFootprints?.before?.length ?? 0) > 0 || (sceneFootprints?.after?.length ?? 0) > 0
+  const hasBurnPerimeterToggle = !!(sarResults?.burnPerimeter && sarResults.burnPerimeter.features.length > 0)
   return (
     <div className="fire-map-container">
       <div ref={containerRef} className="fire-map" />
@@ -593,6 +655,30 @@ export function FireMap({
                   Satellite
                 </button>
               </div>
+              <label
+                className="map-layers-option"
+                title="The officially reported NIFC fire perimeter - not SAR-derived."
+              >
+                <input
+                  type="checkbox"
+                  checked={firePerimeterVisible}
+                  onChange={(e) => setFirePerimeterVisible(e.target.checked)}
+                />
+                Fire perimeter (reported)
+              </label>
+              {hasBurnPerimeterToggle && (
+                <label
+                  className="map-layers-option"
+                  title="SAR-detected change area from this fire's completed acquisition - a separate, independent measurement from the reported perimeter above, not always the same shape or extent."
+                >
+                  <input
+                    type="checkbox"
+                    checked={burnPerimeterVisible}
+                    onChange={(e) => setBurnPerimeterVisible(e.target.checked)}
+                  />
+                  Burn area (SAR-detected)
+                </label>
+              )}
               {hasAlertsToggle && (
                 <label
                   className="map-layers-option"

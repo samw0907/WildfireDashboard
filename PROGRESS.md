@@ -171,8 +171,10 @@ behind anything marked as a real choice, not just what got built.
 ## Backlog / future ideas (not started, logged for later)
 - [ ] Smoke / air quality overlay (NOAA HMS smoke or EPA AirNow) - extends
       exposure-first framing beyond the fire's physical footprint
-- [ ] Satellite imagery basemap toggle (MapTiler), alongside the current
-      OpenFreeMap street style - matches TAFP's own Street/Imagery toggle
+- [x] Satellite imagery basemap toggle - built via Esri World Imagery
+      (raster, no key needed) rather than MapTiler as originally scoped
+      here, alongside the existing OpenFreeMap street style; visibility-
+      swap toggle in the consolidated Layers panel, not a full style reload
 - [ ] Email notification when a new fire enters the priority-acquisition
       slot (separate from the hard confirm-gate on actually spending money)
 - [ ] Building footprints as their own visible map layer (not just used
@@ -706,17 +708,150 @@ loop scene picking instead.
         `burn_perimeter.geojson`/`building_damage.geojson` from that run
         and visually confirmed the fill, legend, and zoom bounds all now
         look correct.
+  - [x] **Methodology hardening — fresh-pipeline review vs. real-world
+        practice, four open questions resolved (2026-08-01)**: prompted by
+        the user spotting the blocky/checkerboard burn-area fill live and
+        asking for a from-scratch pipeline reassessment against industry
+        practice (research + comparison written up in full in
+        `SAR_PIPELINE_REDESIGN.md`). Four points decided and implemented:
+        1. **Despeckling: deliberately not implemented.** A spatial filter
+           (Lee/Refined-Lee) averages over a pixel neighborhood - correct
+           for large homogeneous targets, wrong for a building that's
+           often *smaller than one Sentinel-1 pixel* (~400m² pixel vs.
+           ~100-300m² house - see `SAR_PIPELINE_REDESIGN.md` §0's ICEYE
+           resolution comparison). Composite mode's multi-date median
+           already provides the safe, temporal equivalent; Single-pair
+           mode has no equivalent noise-averaging and, per the user's own
+           framing, realistically just has to live with that until a
+           genuine multi-look source (like ICEYE's own commercial data)
+           is available. The MMU bump (below) and the cosmetic smoothing
+           step target the *visual/patch-count* symptom directly without
+           the risk a spatial filter would add.
+        2. **Minimum-mapping-unit raised from 0.1 ha to 1.0 ha**
+           (`change.py`'s `MIN_PATCH_HECTARES`) - brings the noise-patch
+           filter in line with commonly-cited practice (~1ha flexible
+           guideline; Sentinel-2 workflows often use 6.25ha), up from an
+           order of magnitude finer than standard.
+        3. **Dual-threshold confidence signal**: alongside the existing
+           fixed 2.9dB/1.74dB thresholds, `change.py` now also computes a
+           per-fire Otsu adaptive threshold from scratch in pure numpy
+           (`compute_otsu_threshold()` - no new dependency), returned as
+           `adaptive_threshold_db`. `buildings.py` classifies every
+           building under *both* thresholds; agreement is surfaced as
+           `confidence: "corroborated"`, disagreement as `"uncertain"`
+           (`compute_confidence()`) - turns "which threshold do we
+           believe" from an unresolved conflict into a per-building
+           confidence measure, without needing ground truth to compute.
+        4. **Spatial corroboration for building classification** (closing
+           the exact asymmetry named in `SAR_METHODOLOGY.md` §5 point 4):
+           `apply_spatial_corroboration()` downgrades any building with a
+           `destroyed`/`possibly_affected` read to a new **`unconfirmed`**
+           class if its footprint doesn't intersect an MMU-*surviving*
+           burn patch - i.e. a lone noisy pixel outside any real,
+           spatially-coherent change zone no longer gets asserted as
+           damage. Deliberately a new class, not silently reclassified
+           to `no_damage` - an unconfirmed positive read and a genuine
+           negative read are not the same claim, and collapsing them
+           would hide the exact single-pixel-noise problem this was built
+           to catch. Synthetically tested end-to-end (corroborated-inside-
+           patch stays destroyed; noise-outside-patch downgrades to
+           unconfirmed with `confidence: "n/a"`; threshold-disagreement-
+           inside-patch correctly produces `uncertain`, not `unconfirmed`)
+           before touching real data.
+
+        Also fixed the actual root cause of the checkerboard *appearance*
+        itself (separate from the noise-patch problem above, which is a
+        data question, not a cosmetic one): `vectorise_mask()` traces raw
+        pixel boundaries with zero generalization. Added
+        `smooth_for_display()` (`buffer(+t).buffer(-t).simplify(t)`,
+        `t = pixel_spacing / 2`) applied *only* to the copy written to
+        `burn_perimeter.geojson` for map display - never to the raw
+        `burn_gdf` used for `total_area_ha`/patch-count stats or the
+        spatial-corroboration check above, so the cosmetic fix can't
+        silently change any reported number.
+
+        Also, independently of the methodology work: building-damage map
+        colors bumped to fully-saturated/opaque with a black outline (was
+        muted by the generic all-buildings layer rendering on top - fixed
+        by reordering layer creation, see `SAR_PIPELINE_REDESIGN.md` §3),
+        fire perimeter and SAR-detected burn perimeter given visually
+        distinct reds (`#f87171` light fill vs. `#450a0a` dark line) and
+        made independently toggleable, and a new "perimeter match %" stat
+        (SAR-detected burn area ÷ the fire's own official acreage) added
+        to `AcquisitionPanel.tsx` alongside the existing burn-area/
+        patch-count stats.
+
+        Verified clean before shipping: `py_compile` on all four changed
+        `sar-compute` files, `tsc --noEmit` on the frontend with zero
+        errors. Docker image rebuilt (cache hit on the slow SNAP/GDAL
+        layers, only the `pipeline/`/`entrypoint.py` COPY layers redone)
+        and pushed to ECR; frontend rebuilt and deployed (S3 sync +
+        CloudFront invalidation). **Not yet reflected in any stored
+        result** - Aspen Acres and the Boise-area fire were both computed
+        under the old pipeline (0.1ha MMU, no adaptive threshold, no
+        corroboration); a fresh acquisition run is needed for any fire to
+        show the new behavior.
+  - [x] **Figure output redesign (2026-08-01)**, prompted by reviewing the
+        actual figures produced by the two real runs above: three real
+        problems found, not preferences.
+        1. `make_backscatter_panel`'s three panels didn't share an extent
+           - pre/post VV were full-scene, but the change-magnitude panel
+           was silently the *perimeter-clipped* raster, an entirely
+           different (smaller, irregular) extent from the other two.
+           **Fixed**: the 3-panel comparison now uses the full-scene,
+           unclipped change raster for all three panels; the clipped view
+           became its own new standalone figure, `perimeter_change_map`.
+        2. The overview map and zoom map looked "near identical" and were
+           both unusable - confirmed why: for a large fire where detected
+           burn covers most of the perimeter (Aspen Acres: 97%), "zoom to
+           burn extent" degenerates to "zoom to nearly the whole fire,"
+           at which point individual building footprints (a few pixels
+           each) are invisible, and the legend ends up advertising
+           damage-class colors that aren't visible anywhere on the map.
+           **Overview map dropped entirely** (confirmed with the user,
+           not a unilateral call) - it was 100% vector content (perimeter
+           + burn fill) already better served by the live, pannable/
+           zoomable/hoverable dashboard map; the whole reason static
+           figures exist at all (per this file's own docstring) is the
+           raw raster imagery a vector map can't show, which the overview
+           map never was.
+        3. **Zoom map rewritten as a curated damage "hotspot" figure**,
+           not a burn-extent zoom: grid-bins `destroyed`/
+           `possibly_affected` building centroids (`unconfirmed`
+           deliberately excluded - not confident enough to anchor the
+           headline demo figure on) into 500m cells and zooms tight to
+           the single most concentrated cell, so individual building
+           footprints are actually visible - explicitly a demonstration
+           of the worst-hit area, not a completeness claim (full data
+           stays available as downloadable GeoJSON/the live map). Falls
+           back to the old burn-extent/perimeter chain if a fire has zero
+           confirmed damage. Added: black outlines on building polygons
+           (geopandas ignores `markersize` for polygon geometries, so an
+           outline is what actually makes a footprint visible against a
+           basemap), a dynamic legend (only classes actually present in
+           the final view get a swatch - same fix in spirit as dropping
+           the overview map), and an in-image caption so the PNG is
+           self-explanatory if downloaded/shared on its own.
+        **Verified before shipping**: synthetic unit tests for the
+        grid-hotspot logic (dense cluster correctly wins over a lone
+        far-away point; `unconfirmed` correctly excluded; empty case
+        returns `None`) and the dynamic legend (only requested classes
+        appear), then a full synthetic `run_figures()` smoke test
+        (fake rasters + geometries) confirming all three figures render
+        successfully end-to-end - visually inspected all three outputs,
+        not just checked they didn't crash. `frontend/src/api.ts`'s
+        `INLINE_FIGURE_LABELS` updated to match the new key set
+        (`overview_map` removed, `perimeter_change_map` added). `tsc
+        --noEmit` and `py_compile` both clean. **Not yet rebuilt/pushed/
+        deployed or run against a real fire** - queued behind the user
+        confirming they're happy with the design.
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of
       compute dispatch, above).
-- [ ] **`ADMIN_ACCESS_KEY` still not set in the real `.env`** - confirmed
-      live (2026-07-29): all four mutating acquisition endpoints correctly
-      fail closed (403) with no key configured, which is safe, but it also
-      means "Mark for acquisition" won't work on the deployed site at all
-      until the key is added. The key itself was already generated earlier
-      this session and given to the user to add manually (never written to
-      `.env` directly, per standing rule) - just needs adding.
+- [x] **`ADMIN_ACCESS_KEY`** - since set by the user; confirmed working by
+      the two real end-to-end acquisition runs above (Aspen Acres,
+      Boise-area fire), which both required `/confirm` to succeed.
 
 ## Buffer visualization + within-perimeter stats + basemap (2026-07-29)
 - [x] Added a 4th "band" (0m = within the fire perimeter itself) to

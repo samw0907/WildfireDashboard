@@ -148,9 +148,17 @@ def main() -> None:
         reference_date=scene_dates["before"][0],
         target_crs=target_crs,
         output_path=buildings_output_path,
+        adaptive_threshold_db=change_result["adaptive_threshold_db"],
+        burn_gdf=change_result["burn_gdf"],
     )
 
     damage_counts = buildings_gdf["damage_class"].value_counts().to_dict()
+    damage_counts_adaptive = (
+        buildings_gdf["damage_class_adaptive"].value_counts().to_dict()
+        if change_result["adaptive_threshold_db"] is not None
+        else {}
+    )
+    confidence_counts = buildings_gdf["confidence"].value_counts().to_dict()
 
     # --- Static figures (matplotlib/contextily) - see pipeline/figures.py
     # for why these came back after being dropped earlier in the build ---
@@ -161,6 +169,7 @@ def main() -> None:
         burn_perimeter_path=change_result["burn_perimeter_path"],
         pre_vv_path=pre_vv_path,
         post_vv_path=post_vv_path,
+        change_combined_path=change_result["change_combined_path"],
         change_combined_clipped_path=change_result["change_combined_clipped_path"],
         threshold_db=change.THRESHOLD_COMBINED_DB,
         output_dir=ANALYSIS_DIR,
@@ -195,6 +204,17 @@ def main() -> None:
         "burn_patch_count": change_result["patch_count"],
         "building_damage_counts": damage_counts,
         "total_buildings_classified": int(len(buildings_gdf)),
+        # Adaptive threshold: this fire's own Otsu-derived cutoff, used as
+        # a cross-check against the fixed value below, not a replacement
+        # for it - see SAR_PIPELINE_REDESIGN.md §1.4. None if no valid
+        # clipped data existed to compute one from.
+        "adaptive_threshold_db": change_result["adaptive_threshold_db"],
+        "building_damage_counts_adaptive": damage_counts_adaptive,
+        # How many buildings' fixed-threshold classification agrees with
+        # the adaptive one ("corroborated") vs. disagrees ("uncertain") vs.
+        # wasn't a real comparison at all ("n/a" - no_data/geometry_limited
+        # on at least one side).
+        "confidence_counts": confidence_counts,
         # Threshold and building-dataset honesty framing, carried into the
         # output itself, not just docs - see SAR_METHODOLOGY.md §6/§7.
         # Framed on this project's own methodology and its own limitations

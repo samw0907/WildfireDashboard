@@ -1388,6 +1388,10 @@
   background: #9ca3af;
 }
 
+.damage-dot--unconfirmed {
+  background: #92400e;
+}
+
 .damage-dot--geometry_limited {
   background: #6b7280;
 }
@@ -1554,7 +1558,7 @@
 }
 
 .scene-legend-swatch--burn {
-  background: #7f1d1d;
+  background: #450a0a;
 }
 
 .forecast-column {

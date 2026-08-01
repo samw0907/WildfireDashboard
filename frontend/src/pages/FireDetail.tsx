@@ -199,6 +199,9 @@ export function FireDetail() {
                   <span>
                     <span className="damage-dot damage-dot--no_damage" /> No damage
                   </span>
+                  <span>
+                    <span className="damage-dot damage-dot--unconfirmed" /> Unconfirmed signal
+                  </span>
                 </>
               )}
             </div>

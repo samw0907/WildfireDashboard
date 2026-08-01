@@ -175,6 +175,17 @@ export interface AcquisitionResultSummary {
   threshold_note: string
   building_dataset: string
   building_dataset_note: string
+  // This fire's own Otsu-derived threshold, computed from its own change-
+  // image statistics as a cross-check against threshold_db (which is
+  // fixed/borrowed from a different fire) - not a replacement for it. Null
+  // (not just absent) on results from before this feature existed, or if
+  // there was no valid clipped data to derive one from.
+  adaptive_threshold_db?: number | null
+  building_damage_counts_adaptive?: Record<string, number>
+  // How many buildings' fixed-threshold classification agrees
+  // ("corroborated") vs. disagrees ("uncertain") vs. wasn't a real
+  // comparison at all ("n/a" - no_data/geometry_limited on either side).
+  confidence_counts?: Record<string, number>
   // {label: filename} for every file actually produced - fetch via
   // acquisitionDownloadUrl(fireId, filename), not directly (the results
   // bucket is private, this is a label->filename map, not a URL map).
@@ -188,9 +199,9 @@ export interface AcquisitionResultSummary {
 // itself) is download-only, not inlined. Matches the labels
 // sar-compute/pipeline/figures.py actually produces.
 export const INLINE_FIGURE_LABELS: { key: string; title: string }[] = [
-  { key: 'overview_map', title: 'Overview' },
-  { key: 'damage_zoom_map', title: 'Building Damage (zoomed)' },
-  { key: 'backscatter_panel', title: 'Backscatter Comparison' },
+  { key: 'damage_zoom_map', title: 'Building Damage (highest-concentration area)' },
+  { key: 'backscatter_panel', title: 'Backscatter Comparison (full scene)' },
+  { key: 'perimeter_change_map', title: 'Change Magnitude (fire perimeter)' },
 ]
 
 export function acquisitionDownloadUrl(fireId: string, sequence: number, filename: string): string {
