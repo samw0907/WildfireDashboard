@@ -191,33 +191,44 @@ export function Reference() {
         <p>
           Population is <em>not</em> a raster/pixel grid here - each buffer's population estimate
           is built from Census <strong>block groups</strong>: irregular polygons, each carrying a
-          single total-population figure from the ACS 5-Year survey. For every block group that
-          overlaps a buffer ring, this tool assigns{' '}
-          <code>population × (fraction of the block group's area inside the buffer)</code> -
-          areal-weighted apportionment. That math assumes population is spread{' '}
-          <em>uniformly</em> across the entire block group polygon.
+          single total-population figure from the ACS 5-Year survey. Block groups are sized by a{' '}
+          <strong>population</strong> target (roughly 600-3,000 people each), not a land-area
+          target - so in sparse, wildfire-prone terrain (forest, high desert, mountains), a single
+          block group can span hundreds of square kilometers just to reach that population count.
         </p>
         <p>
-          Block groups are sized by a <strong>population</strong> target (roughly 600-3,000
-          people each), not a land-area target - so in sparse, wildfire-prone terrain (forest,
-          high desert, mountains), a single block group can span hundreds of square kilometers
-          just to reach that population count. Checked directly against fires in this tool's own
-          data: a small fire's entire 2,400m buffer can cover less land area than a{' '}
-          <em>single</em> block group overlapping it - in one case checked, over 10x less. If that
-          block group's real population sits in a town elsewhere within its boundary rather than
-          near the fire, the areal-uniform assumption overstates exposure; if the fire happens to
-          sit right on the one populated pocket in an otherwise-empty block group, it understates
-          exposure instead. Larger fires are less affected, since their buffers span many block
-          groups and individual errors average out more.
+          <strong>Population is distributed to real OSM buildings, not spread evenly across the
+          block group's land area (dasymetric weighting).</strong> For every block group that
+          overlaps a fire's buffer, this tool fetches its actual OSM building count, divides the
+          block group's Census population evenly across those buildings, then counts only the
+          buildings that actually fall inside a given buffer band. A small fire's buffer clipping
+          a mostly-empty corner of a huge rural block group is no longer credited with a share of
+          population proportional to <em>land area</em> - it only gets credit for the population
+          attributed to whichever real buildings happen to sit inside it.
         </p>
         <p>
-          The alternative originally considered, WorldPop's gridded population data, uses
-          dasymetric modeling - satellite-derived building/settlement layers redistributing
-          population <em>within</em> each admin unit rather than assuming uniform density - which
-          would handle this specific case better. It was dropped for this project over persistent
-          hosted-API reliability issues, not because the Census approach was chosen as more
-          accurate. The tradeoff: Census data is authoritative and always available, but less
-          precise for small perimeters in sparse block groups specifically.
+          This replaced a simpler areal-weighted method (
+          <code>population × fraction of the block group's area inside the buffer</code>) after it
+          produced a genuinely implausible real result - a fire with only 3 buildings in its
+          perimeter was attributed 564 people, because its buffer happened to clip a sliver of a
+          huge, sparse block group whose real population lived elsewhere within that same polygon.
+          Dasymetric mapping (building- or settlement-weighted redistribution, rather than assuming
+          uniform density) is the standard answer to exactly this failure mode - not something
+          invented for this project, and in fact the same idea behind why WorldPop's gridded
+          population product (considered earlier, dropped over hosted-API reliability issues, not
+          accuracy) would have handled this case better than plain Census areal weighting.
+        </p>
+        <p>
+          <strong>Real limitations that remain, even with this improvement:</strong> not every OSM
+          "building" is a residence - barns, sheds, and commercial/industrial structures all
+          typically carry the same generic <code>building=yes</code>-style tag, and rural OSM
+          tagging is usually too inconsistent to reliably filter down to just houses, so building{' '}
+          <em>count</em> is a proxy for occupancy, not a direct measure of it. A block group with
+          real population but zero OSM buildings mapped at all (a genuine coverage gap, not
+          hypothetical) has nothing for dasymetric weighting to distribute against, so that specific
+          block group falls back to the older areal-weighted method instead - this tool is
+          honestly a hybrid, not a clean replacement. And fundamentally, this is still a modeled
+          estimate with no ground truth to check it against for any specific fire, same as before.
         </p>
       </section>
 

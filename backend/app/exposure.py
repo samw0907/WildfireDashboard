@@ -34,36 +34,109 @@ MAX_BAND = max(BUFFER_BANDS)
 REQUEST_DELAY_SECONDS = 2
 
 
-def _population_within_buffer(
-    block_groups: list[census.BlockGroup], population_by_geoid: dict[str, float], buffer_wgs84
+def _population_within_buffer_areal(
+    bg: census.BlockGroup, pop: float, buffer_wgs84
 ) -> float:
-    """Areal-weighted estimate: each block group contributes population *
-    (fraction of its area inside the buffer). Computed in Albers, since
-    area in raw WGS84 degrees is meaningless."""
-    buffer_albers = geo.to_albers(buffer_wgs84)
+    """Areal-weighted fallback for a single block group: contributes
+    population * (fraction of its area inside the buffer). Only used when
+    a block group has zero OSM buildings mapped at all (a real data gap -
+    dasymetric weighting has nothing to distribute against in that case,
+    not a bug in the weighting itself). Computed in Albers, since area in
+    raw WGS84 degrees is meaningless."""
+    bg_albers = geo.to_albers(bg.geometry)
+    bg_area = bg_albers.area
+    if bg_area <= 0:
+        return 0.0
+    intersection_area = bg_albers.intersection(geo.to_albers(buffer_wgs84)).area
+    if intersection_area <= 0:
+        return 0.0
+    return pop * (intersection_area / bg_area)
+
+
+def _buildings_in_geometry(buildings: list, geometry) -> int:
+    return sum(1 for b in buildings if geometry.contains(b.representative_point()))
+
+
+def _fetch_block_group_building_counts(
+    block_groups: list[census.BlockGroup], client: httpx.Client
+) -> dict[str, int]:
+    """Total OSM building count per block group, needed to convert its
+    Census population into a per-building share (dasymetric weighting) -
+    a fundamentally different, wider query than the fire's own 2,400m
+    buffer fetch, since block groups are sized by *population* (600-3,000
+    people) not land area and routinely extend well beyond it in sparse
+    terrain.
+
+    Fetched as a single Overpass call covering every overlapping block
+    group's combined bounding box, not one call per block group - a large
+    fire can span many block groups, and firing off a separate request
+    (plus politeness delay) per one would mean real, avoidable extra load
+    on the shared public instance. Block groups are a non-overlapping
+    partition by construction, so filtering the same candidate set against
+    each one's own polygon locally afterward is safe - no double-counting
+    risk the way there would be from unioning separately-fetched sets."""
+    if not block_groups:
+        return {}
+    lons = [x for bg in block_groups for x in (bg.geometry.bounds[0], bg.geometry.bounds[2])]
+    lats = [y for bg in block_groups for y in (bg.geometry.bounds[1], bg.geometry.bounds[3])]
+    candidates = overpass.fetch_buildings_in_bbox(
+        min_lat=min(lats), min_lon=min(lons), max_lat=max(lats), max_lon=max(lons), client=client
+    )
+    return {bg.geoid: _buildings_in_geometry(candidates, bg.geometry) for bg in block_groups}
+
+
+def _population_within_buffer_dasymetric(
+    block_groups: list[census.BlockGroup],
+    population_by_geoid: dict[str, float],
+    building_counts_by_geoid: dict[str, int],
+    fire_buildings: list,
+    buffer_wgs84,
+) -> float:
+    """Building-weighted (dasymetric) estimate: a block group's population
+    is first divided evenly across its own real OSM buildings (not its
+    raw area), then only the buildings that actually fall inside this
+    buffer band count toward its total - fixes the areal-weighted
+    method's worst failure mode (a sparse block group's population
+    getting spread across empty land the buffer barely clips, producing
+    implausible results like 564 people attributed to 3 buildings,
+    confirmed live on a real fire). Falls back to areal weighting for any
+    block group with zero mapped buildings - a real OSM coverage gap, not
+    something dasymetric weighting can work around."""
     total = 0.0
     for bg in block_groups:
         pop = population_by_geoid.get(bg.geoid)
         if pop is None:
             continue
-        bg_albers = geo.to_albers(bg.geometry)
-        bg_area = bg_albers.area
-        if bg_area <= 0:
-            continue
-        intersection_area = bg_albers.intersection(buffer_albers).area
-        if intersection_area <= 0:
-            continue
-        total += pop * (intersection_area / bg_area)
+        building_count = building_counts_by_geoid.get(bg.geoid, 0)
+        if building_count > 0:
+            population_per_building = pop / building_count
+            buildings_in_bg_and_buffer = sum(
+                1
+                for b in fire_buildings
+                if bg.geometry.contains(b.representative_point()) and buffer_wgs84.contains(b.representative_point())
+            )
+            total += population_per_building * buildings_in_bg_and_buffer
+        else:
+            total += _population_within_buffer_areal(bg, pop, buffer_wgs84)
     return total
 
 
 def _compute_population_by_band(
-    band_buffers: dict[int, object], min_lat: float, min_lon: float, max_lat: float, max_lon: float
+    band_buffers: dict[int, object],
+    fire_buildings: list,
+    min_lat: float,
+    min_lon: float,
+    max_lat: float,
+    max_lon: float,
+    client: httpx.Client,
 ) -> dict[int, float | None]:
     """Best-effort: population is an enhancement over the building counts,
     not something worth losing a fire's whole exposure computation over.
     Returns all-None (not raised) if no API key is configured yet, or if
-    the Census API call itself fails for any reason - logged either way."""
+    any Census/Overpass call in this fails for any reason - logged either
+    way. A real per-block-group data gap (zero mapped buildings) is
+    handled by the areal-weighted fallback above, not treated as a
+    failure of the whole cycle."""
     api_key = get_settings().census_api_key
     if not api_key:
         return {band: None for band in band_buffers}
@@ -71,12 +144,15 @@ def _compute_population_by_band(
     try:
         block_groups = census.fetch_block_groups_in_bbox(min_lat=min_lat, min_lon=min_lon, max_lat=max_lat, max_lon=max_lon)
         population_by_geoid = census.fetch_population_by_geoid(block_groups, api_key)
+        building_counts_by_geoid = _fetch_block_group_building_counts(block_groups, client)
         return {
-            band: _population_within_buffer(block_groups, population_by_geoid, buffer)
+            band: _population_within_buffer_dasymetric(
+                block_groups, population_by_geoid, building_counts_by_geoid, fire_buildings, buffer
+            )
             for band, buffer in band_buffers.items()
         }
     except Exception:
-        logger.exception("Census population lookup failed - leaving population_est null for this cycle")
+        logger.exception("Census/building population lookup failed - leaving population_est null for this cycle")
         return {band: None for band in band_buffers}
 
 
@@ -142,7 +218,7 @@ def compute_exposure_for_fire(session: Session, fire: Fire, client: httpx.Client
     session.execute(cache_stmt)
 
     population_by_band = _compute_population_by_band(
-        band_buffers, min_lat=min_lat, min_lon=min_lon, max_lat=max_lat, max_lon=max_lon
+        band_buffers, buildings, min_lat=min_lat, min_lon=min_lon, max_lat=max_lat, max_lon=max_lon, client=client
     )
 
     for band in BUFFER_BANDS:

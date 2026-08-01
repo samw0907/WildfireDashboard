@@ -817,3 +817,65 @@ loop scene picking instead.
 - [x] **Loading spinner**: replaced plain "Loading…" text with a CSS
       spinner (`PageLoading` component) on Dashboard and Fire Detail -
       some fetches take up to ~10s, worth a real indicator.
+
+## Population methodology: dasymetric (building-weighted) redistribution (2026-08-01)
+Real bug found by the user reviewing a real fire's page: a fire with only 3
+buildings in its perimeter showed a population estimate of 564 - the
+areal-weighted method (`population × fraction of block group area inside
+the buffer`) assumes population is spread uniformly across a whole block
+group polygon, which breaks badly when a fire's buffer clips a mostly-empty
+sliver of a large, sparse rural block group whose real population lives
+elsewhere within that same polygon.
+- [x] **Replaced with dasymetric (building-weighted) redistribution**:
+      for every block group overlapping a fire's buffer, fetch its real
+      OSM building count, divide its Census population evenly across
+      those buildings, then only count buildings that actually fall
+      inside a given buffer band - population now follows real habitation
+      proxies, not raw land area. Not an invented technique - this is the
+      standard academic/GIS answer to exactly this failure mode, and the
+      same underlying idea (settlement-weighted redistribution) behind why
+      WorldPop's gridded data would have handled this case better than
+      plain areal weighting, back when WorldPop vs. Census was first
+      decided (see `DECISIONS.md`).
+- [x] **Real engineering cost, not a formula tweak**: needed each block
+      group's *total* building count, not just the portion already cached
+      within the fire's 2,400m buffer (block groups routinely extend well
+      beyond it in sparse terrain) - a genuinely wider Overpass fetch.
+      **Optimized before shipping**: rather than one Overpass call per
+      overlapping block group (real risk of many extra round-trips for a
+      large fire spanning many block groups), fetches every relevant block
+      group's buildings in a single combined-bbox call, then filters the
+      same candidate set locally per block group - safe since block
+      groups are a non-overlapping partition by construction. Exactly one
+      additional Overpass call per fire recompute, not N.
+- [x] **Fallback preserved for a real data gap**: a block group with
+      Census population but zero OSM buildings mapped at all falls back to
+      the original areal-weighted method for that specific block group -
+      dasymetric weighting has nothing to distribute against otherwise.
+      This makes the final result a genuine hybrid, not a clean
+      replacement - documented as such on the Reference page, not glossed
+      over.
+- [x] **Verified with synthetic tests before deploying** (no real block
+      group/building data can be constructed by hand at this precision, so
+      this was checked with controlled geometry, not a live fire): a 3-of-
+      20-buildings-in-buffer case produced the exact expected proportional
+      result (84.6 = 564 × 3/20); the zero-buildings fallback path
+      produced a result consistent with the pre-existing (unchanged)
+      areal-weighting code; the single-combined-query optimization was
+      checked against two non-overlapping synthetic block groups with a
+      mocked Overpass response and produced the correct per-block-group
+      split (2 and 1 buildings respectively) from one combined fetch.
+- [x] Reference page's population methodology section rewritten to
+      describe the new approach and its own remaining honest limitations
+      (not every OSM building is residential; rural tagging is often too
+      inconsistent to filter to just houses; a block group with real
+      population but zero mapped buildings still uses the older areal
+      method) - not just swapped the formula without updating the
+      explanation.
+- [ ] **Not yet verified against a real fire's real data** - this rolls
+      out gradually as each fire's exposure cache naturally goes stale
+      (24h fallback) or its perimeter changes, not instantly for every
+      already-computed fire. The user can force an immediate recompute on
+      a specific fire via the existing `POST /api/fires/{id}/recompute`
+      (their own `RECOMPUTE_API_KEY`, never seen by this session) to
+      verify the exact fire that surfaced the original bug.
