@@ -23,6 +23,10 @@ export interface Fire {
   state: string | null
   priority_score: number
   in_active_fire_weather_warning: boolean
+  // True if this fire has ever had at least one SAR acquisition requested
+  // (any status - marked, processing, complete, or failed), so the fires
+  // table can flag "already worked on this one" at a glance.
+  has_acquisition: boolean
   exposure: ExposureStat[]
 }
 

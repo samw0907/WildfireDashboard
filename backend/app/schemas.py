@@ -26,6 +26,10 @@ class FireOut(BaseModel):
     state: str | None
     priority_score: float
     in_active_fire_weather_warning: bool
+    # True if this fire has ever had at least one SAR acquisition requested
+    # (any status), so the fires table can flag "already worked on this
+    # one" without the frontend needing a separate per-fire fetch.
+    has_acquisition: bool
     exposure: list[ExposureStatOut]
 
 

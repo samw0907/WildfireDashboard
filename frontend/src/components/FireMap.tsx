@@ -444,9 +444,20 @@ export function FireMap({
     }
   }, [fires, selectedFireId, fitToSelection, buffers, alerts, sceneFootprints, sceneFootprintsVisible, sarResults, buildings])
 
+  // Note: guarded only by `map` existing, not by map.isStyleLoaded() - that
+  // check is stricter than it needs to be here and was the actual bug
+  // behind an intermittent "toggle does nothing" report. isStyleLoaded()
+  // reflects the *whole* style/tile-loading state and can transiently
+  // report false whenever unrelated sources update (e.g. a big buildings/
+  // damage setData() elsewhere), silently dropping a same-tick toggle
+  // click with no retry. The per-layer map.getLayer() checks already below
+  // are the actually-correct guard: once our own map.on('load') callback
+  // has added a layer, getLayer() stays truthy for the rest of the map's
+  // lifetime regardless of ongoing tile activity, so they're sufficient
+  // on their own.
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
+    if (!map) return
     const visibility = alertsVisible ? 'visible' : 'none'
     if (map.getLayer(ALERTS_FILL_LAYER_ID)) map.setLayoutProperty(ALERTS_FILL_LAYER_ID, 'visibility', visibility)
     if (map.getLayer(ALERTS_LINE_LAYER_ID)) map.setLayoutProperty(ALERTS_LINE_LAYER_ID, 'visibility', visibility)
@@ -454,7 +465,7 @@ export function FireMap({
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
+    if (!map) return
     const visibility = buildingsVisible ? 'visible' : 'none'
     const fillId = `${BUILDINGS_SOURCE_ID}-fill`
     const lineId = `${BUILDINGS_SOURCE_ID}-line`
@@ -464,7 +475,7 @@ export function FireMap({
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !map.isStyleLoaded()) return
+    if (!map) return
     const visibility = sceneFootprintsVisible ? 'visible' : 'none'
     const beforeId = `${SCENE_BEFORE_SOURCE_ID}-line`
     const afterId = `${SCENE_AFTER_SOURCE_ID}-line`

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { exposureAtBand, type Fire } from '../api'
+import { AcquisitionBadge } from './AcquisitionBadge'
 import { InfoHint } from './InfoHint'
 import { RfwBadge } from './RfwBadge'
 import { PRIORITY_SCORE_HELP, POPULATION_HELP } from '../helpText'
@@ -114,6 +115,7 @@ export function FireTable({ fires, onSelectFire }: FireTableProps) {
                   <td>
                     {f.name}
                     {f.in_active_fire_weather_warning && <RfwBadge compact />}
+                    {f.has_acquisition && <AcquisitionBadge compact />}
                   </td>
                   <td>{f.state ?? '—'}</td>
                   <td>{f.discovered_date ? new Date(f.discovered_date).toLocaleDateString() : '—'}</td>
