@@ -9,12 +9,14 @@ matching the recompute endpoint's pattern - candidate search itself is
 free (no CDSE auth needed) so it stays open for browsing.
 """
 
+import io
+import zipfile
 from datetime import datetime, timedelta, timezone
 
 import boto3
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from shapely.geometry import shape
 from sqlalchemy.orm import Session
 
@@ -158,6 +160,37 @@ def download_acquisition_file(fire_id: str, filename: str, db: Session = Depends
         ExpiresIn=300,
     )
     return RedirectResponse(url)
+
+
+@router.get("/fires/{fire_id}/acquisition/download-all")
+def download_all_acquisition_files(fire_id: str, db: Session = Depends(get_db)):
+    """Zips every file in the fire's result manifest and streams it back -
+    a real download convenience given how many files one acquisition now
+    produces (raw RTC rasters + GeoJSON + figures), not just a nice-to-have.
+    Built in-memory rather than a temp file on disk - fine at this
+    project's per-fire result sizes and demo-scale traffic."""
+    fire = _get_fire_or_404(db, fire_id)
+    manifest = (fire.acquisition_result or {}).get("files", {})
+    if not manifest:
+        raise HTTPException(status_code=404, detail="No result files available for this fire")
+
+    settings = get_settings()
+    client = boto3.client(
+        "s3", region_name=settings.aws_region, endpoint_url=f"https://s3.{settings.aws_region}.amazonaws.com"
+    )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for filename in manifest.values():
+            obj = client.get_object(Bucket=settings.sar_results_bucket, Key=f"acquisitions/{fire_id}/{filename}")
+            zf.writestr(filename, obj["Body"].read())
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fire_id}-sar-results.zip"'},
+    )
 
 
 @router.get("/fires/{fire_id}/acquisition/candidates", response_model=AcquisitionCandidatesOut)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  acquisitionDownloadAllUrl,
   acquisitionDownloadUrl,
   confirmAcquisition,
   getAcquisition,
@@ -14,6 +15,7 @@ import {
 } from '../api'
 import { StatCard } from './StatCard'
 import { AreaIcon, BuildingIcon, FlameIcon } from './icons'
+import { Lightbox } from './Lightbox'
 
 // Friendly labels for buildings.py's classify_damage()/flag_geometry_limited()
 // classes - order matters here (most-to-least severe), the summary table
@@ -181,6 +183,7 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange }: Ac
   const [selectedAfter, setSelectedAfter] = useState<Scene[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
 
   useEffect(() => {
     onScenesChange?.({
@@ -519,22 +522,32 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange }: Ac
 
               {INLINE_FIGURE_LABELS.some(({ key }) => acquisition.result!.files[key]) && (
                 <div className="figure-gallery">
-                  {INLINE_FIGURE_LABELS.filter(({ key }) => acquisition.result!.files[key]).map(({ key, title }) => (
-                    <figure key={key} className="figure-item">
-                      <img
-                        src={acquisitionDownloadUrl(fireId, acquisition.result!.files[key])}
-                        alt={title}
-                        loading="lazy"
-                      />
-                      <figcaption>{title}</figcaption>
-                    </figure>
-                  ))}
+                  {INLINE_FIGURE_LABELS.filter(({ key }) => acquisition.result!.files[key]).map(({ key, title }) => {
+                    const src = acquisitionDownloadUrl(fireId, acquisition.result!.files[key])
+                    return (
+                      <figure key={key} className="figure-item">
+                        <img
+                          src={src}
+                          alt={title}
+                          loading="lazy"
+                          className="figure-item-img"
+                          onClick={() => setLightbox({ src, alt: title })}
+                        />
+                        <figcaption>{title}</figcaption>
+                      </figure>
+                    )
+                  })}
                 </div>
               )}
 
               {Object.keys(acquisition.result.files).length > 0 && (
                 <div className="acquisition-downloads">
-                  <h5>Download results</h5>
+                  <div className="acquisition-downloads-header">
+                    <h5>Download results</h5>
+                    <a className="download-all-link" href={acquisitionDownloadAllUrl(fireId)} download>
+                      Download all (.zip)
+                    </a>
+                  </div>
                   <ul>
                     {Object.entries(acquisition.result.files).map(([label, filename]) => (
                       <li key={label}>
@@ -549,6 +562,8 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange }: Ac
               )}
             </div>
           )}
+
+          {lightbox && <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />}
 
           <button
             className="acquisition-cancel-btn"

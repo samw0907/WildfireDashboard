@@ -178,6 +178,10 @@ export function acquisitionDownloadUrl(fireId: string, filename: string): string
   return `${API_BASE_URL}/api/fires/${fireId}/acquisition/download/${encodeURIComponent(filename)}`
 }
 
+export function acquisitionDownloadAllUrl(fireId: string): string {
+  return `${API_BASE_URL}/api/fires/${fireId}/acquisition/download-all`
+}
+
 export interface Acquisition {
   status: 'marked' | 'confirmed' | 'processing' | 'complete' | 'failed' | null
   before_scenes: Scene[]

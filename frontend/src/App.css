@@ -1215,12 +1215,13 @@
   max-width: 100%;
 }
 
-.figure-item img {
+.figure-item-img {
   width: 100%;
   height: auto;
   border-radius: 8px;
   border: 1px solid var(--border);
   display: block;
+  cursor: zoom-in;
 }
 
 .figure-item figcaption {
@@ -1236,10 +1237,22 @@
   border-top: 1px solid var(--border);
 }
 
-.acquisition-downloads h5 {
+.acquisition-downloads-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.acquisition-downloads-header h5 {
   font-size: 13px;
   color: var(--text-heading);
-  margin-bottom: 6px;
+  margin: 0;
+}
+
+.download-all-link {
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .acquisition-downloads ul {
@@ -1257,6 +1270,72 @@
 .download-filename {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+/* Lightbox - full-screen zoom/pan viewer for the SAR result figures */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-toolbar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 201;
+  display: flex;
+  gap: 8px;
+}
+
+.lightbox-toolbar button {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.lightbox-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.lightbox-viewport {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 85vh;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.05s linear;
+}
+
+.lightbox-img--dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.lightbox-caption {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
 }
 
 .scene-legend-swatch--burn {

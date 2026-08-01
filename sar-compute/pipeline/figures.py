@@ -28,9 +28,17 @@ DAMAGE_COLORS = {
     "destroyed": "#dc2626",
     "possibly_affected": "#f97316",
     "no_damage": "#16a34a",
-    "no_data": "#9ca3af",
     "geometry_limited": "#6b7280",
 }
+# Deliberately excluded from DAMAGE_COLORS/plotting: "no_data" - once
+# building damage is correctly clipped to the fire's own perimeter (see
+# change.py/entrypoint.py), the overwhelming majority of the cached
+# 2,400m-buffer building set falls outside it and is "no_data" by
+# definition. Plotting thousands of uninformative gray dots added visual
+# noise without telling the viewer anything - a building not being
+# classified isn't itself a finding worth a map marker.
+BURN_COLOR = "#7f1d1d"
+BURN_LABEL = "Burn area detected"
 
 
 def _add_basemap(ax, crs) -> None:
@@ -43,24 +51,42 @@ def _add_basemap(ax, crs) -> None:
         logger.warning("Basemap tile fetch failed - continuing without one", exc_info=True)
 
 
-def _damage_legend() -> list[Patch]:
-    return [Patch(facecolor=color, label=label.replace("_", " ").title()) for label, color in DAMAGE_COLORS.items()]
+def _legend(include_burn: bool) -> list[Patch]:
+    patches = [Patch(facecolor=color, label=label.replace("_", " ").title()) for label, color in DAMAGE_COLORS.items()]
+    if include_burn:
+        # alpha matches the actual fill's own opacity below, not full
+        # saturation - a legend swatch that looks darker than what's
+        # actually on the map reads as a mismatch, exactly what was
+        # flagged as "vague colouring that doesn't match the key."
+        patches.insert(0, Patch(facecolor=BURN_COLOR, alpha=0.35, label=BURN_LABEL))
+    return patches
 
 
-def make_overview_map(perimeter_gdf: gpd.GeoDataFrame, buildings_gdf: gpd.GeoDataFrame, output_path: str) -> None:
+def _plot_classified_buildings(ax, buildings_gdf: gpd.GeoDataFrame, markersize: float) -> None:
+    for damage_class, color in DAMAGE_COLORS.items():
+        subset = buildings_gdf[buildings_gdf["damage_class"] == damage_class]
+        if len(subset):
+            subset.plot(ax=ax, color=color, markersize=markersize)
+
+
+def make_overview_map(
+    perimeter_gdf: gpd.GeoDataFrame,
+    burn_gdf: gpd.GeoDataFrame | None,
+    buildings_gdf: gpd.GeoDataFrame,
+    output_path: str,
+) -> None:
     """Full fire-perimeter context, matching the regional-overview figure
     in the original pipeline's own output set."""
     fig = Figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
     perimeter_gdf.boundary.plot(ax=ax, color="black", linewidth=1.5, linestyle="--")
-    for damage_class, color in DAMAGE_COLORS.items():
-        subset = buildings_gdf[buildings_gdf["damage_class"] == damage_class]
-        if len(subset):
-            subset.plot(ax=ax, color=color, markersize=3)
+    if burn_gdf is not None and len(burn_gdf):
+        burn_gdf.plot(ax=ax, color=BURN_COLOR, alpha=0.35)
+    _plot_classified_buildings(ax, buildings_gdf, markersize=4)
     _add_basemap(ax, perimeter_gdf.crs)
     ax.set_axis_off()
     ax.set_title("SAR Damage Assessment — Overview")
-    ax.legend(handles=_damage_legend(), loc="lower right", fontsize=8, framealpha=0.9)
+    ax.legend(handles=_legend(include_burn=burn_gdf is not None and len(burn_gdf) > 0), loc="lower right", fontsize=8, framealpha=0.9)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
 
 
@@ -70,28 +96,35 @@ def make_damage_zoom_map(
     buildings_gdf: gpd.GeoDataFrame,
     output_path: str,
 ) -> None:
-    """Zoomed to the classified buildings' own extent (not a hand-picked
-    "most damaged neighbourhood" like the original pipeline's manual
-    figure - that needs cluster-detection logic this doesn't have; the
-    building extent is naturally the relevant area regardless)."""
+    """Zoomed to the *detected burn area's* own extent, not the full
+    cached building set (which spans the whole 2,400m exposure buffer -
+    often much wider than the fire itself, which produced a "zoom" that
+    wasn't actually zoomed to anything in particular). Falls back to
+    classified (non-"no_data") buildings, then the full perimeter, if no
+    burn area was detected at all - always zooming to *something*
+    meaningful rather than defaulting to the full building set."""
     fig = Figure(figsize=(10, 10))
     ax = fig.add_subplot(111)
     perimeter_gdf.boundary.plot(ax=ax, color="black", linewidth=1.5, linestyle="--")
     if burn_gdf is not None and len(burn_gdf):
-        burn_gdf.plot(ax=ax, color="#7f1d1d", alpha=0.35)
-    for damage_class, color in DAMAGE_COLORS.items():
-        subset = buildings_gdf[buildings_gdf["damage_class"] == damage_class]
-        if len(subset):
-            subset.plot(ax=ax, color=color, markersize=6)
-    if len(buildings_gdf):
-        minx, miny, maxx, maxy = buildings_gdf.total_bounds
-        pad_x, pad_y = (maxx - minx) * 0.1, (maxy - miny) * 0.1
-        ax.set_xlim(minx - pad_x, maxx + pad_x)
-        ax.set_ylim(miny - pad_y, maxy + pad_y)
+        burn_gdf.plot(ax=ax, color=BURN_COLOR, alpha=0.35)
+    _plot_classified_buildings(ax, buildings_gdf, markersize=8)
+
+    classified = buildings_gdf[buildings_gdf["damage_class"] != "no_data"]
+    if burn_gdf is not None and len(burn_gdf):
+        minx, miny, maxx, maxy = burn_gdf.total_bounds
+    elif len(classified):
+        minx, miny, maxx, maxy = classified.total_bounds
+    else:
+        minx, miny, maxx, maxy = perimeter_gdf.total_bounds
+    pad_x, pad_y = max((maxx - minx) * 0.15, 50), max((maxy - miny) * 0.15, 50)
+    ax.set_xlim(minx - pad_x, maxx + pad_x)
+    ax.set_ylim(miny - pad_y, maxy + pad_y)
+
     _add_basemap(ax, perimeter_gdf.crs)
     ax.set_axis_off()
     ax.set_title("SAR Building Damage — Zoomed")
-    ax.legend(handles=_damage_legend(), loc="lower right", fontsize=8, framealpha=0.9)
+    ax.legend(handles=_legend(include_burn=burn_gdf is not None and len(burn_gdf) > 0), loc="lower right", fontsize=8, framealpha=0.9)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
 
 
@@ -156,7 +189,7 @@ def run_figures(
 
     try:
         path = os.path.join(output_dir, "overview_map.png")
-        make_overview_map(perimeter_gdf, buildings_gdf, path)
+        make_overview_map(perimeter_gdf, burn_gdf, buildings_gdf, path)
         outputs["overview_map"] = path
     except Exception:
         logger.exception("Overview map generation failed - continuing without it")

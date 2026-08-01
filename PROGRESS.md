@@ -681,6 +681,31 @@ loop scene picking instead.
         by reproducing the exact failure locally, then confirming the
         corrected client produces a URL that actually fetches (200, valid
         PNG) before considering it done.
+
+        **Real bugs found visually reviewing the actual rendered figures**
+        (2026-08-01, user inspected the live site): (1) `make_overview_map`
+        never received `burn_gdf` at all - the burn-area fill only ever
+        rendered on the zoomed figure, so the overview showed just a bare
+        perimeter outline. (2) The "zoomed" figure's bounds came from the
+        *full* cached building set (the whole 2,400m exposure buffer -
+        often much wider than the fire itself, in one case wide enough to
+        include all of Boise), not anything fire-specific, so it wasn't
+        meaningfully zoomed to anything. (3) The burn-area fill was
+        rendered with no matching legend entry on either figure - a real,
+        clearly-visible color with no explanation in the key. **Fixed**:
+        overview map now plots `burn_gdf` too; the zoom map now zooms to
+        the burn area's own bounds (falling back to classified buildings,
+        then the full perimeter, if no burn was detected at all); a "Burn
+        area detected" legend swatch (opacity-matched to the actual fill)
+        was added to both; `no_data` buildings (now the overwhelming
+        majority of the cached set, per the perimeter-clipping fix above)
+        are no longer plotted at all - they added visual noise without
+        conveying anything. Verified against the real Boise fire's actual
+        S3 output (not just re-reading the code) before pushing: reran
+        both figure functions inside the built image against the genuine
+        `burn_perimeter.geojson`/`building_damage.geojson` from that run
+        and visually confirmed the fill, legend, and zoom bounds all now
+        look correct.
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of
