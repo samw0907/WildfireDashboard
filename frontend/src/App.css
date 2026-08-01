@@ -930,6 +930,12 @@
   cursor: not-allowed;
 }
 
+.confirm-dialog-danger-btn {
+  background: var(--accent-red);
+  color: #fff;
+  border: none;
+}
+
 .admin-key-cancel-btn {
   background: none;
   border: 1px solid var(--border);
@@ -987,6 +993,10 @@
   margin-bottom: 14px;
 }
 
+.acquisition-tab-wrapper {
+  position: relative;
+}
+
 .acquisition-tab {
   display: flex;
   flex-direction: column;
@@ -999,6 +1009,37 @@
   color: var(--text);
   font-size: 12px;
   cursor: pointer;
+}
+
+.acquisition-tab-wrapper .acquisition-tab {
+  padding-right: 24px;
+}
+
+.acquisition-tab-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.acquisition-tab-delete:hover:not(:disabled) {
+  color: var(--accent-red);
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.acquisition-tab-delete:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .acquisition-tab--active {

@@ -986,6 +986,53 @@ reasoning. Summary of what changed:
   footprints matter most during picking - still toggleable back on
   manually via a new `scene-footprints-toggle` checkbox.
 
+## Regression found + fixed: S3 path change broke an existing fire's downloads (2026-08-01)
+While spot-checking whether the multi-acquisition migration had deleted
+anything (it hadn't - see below), found a real regression the S3 path
+change itself introduced: the Idaho fire's (`C255B5C1-...`) Acquisition #1
+had a complete, working `files` manifest (RTC rasters, figures, GeoJSON)
+from before today's session - but its actual S3 objects still sat at the
+*old* flat path (`acquisitions/{fire_id}/{filename}`), while the new
+download endpoints now look under `acquisitions/{fire_id}/{sequence}/`.
+Every download link and inline figure on that fire's page would have
+404'd. Fixed by moving all 11 of that acquisition's S3 objects to the new
+`.../1/` path (small files via `aws s3 mv`; the 4 large rasters needed
+`aws s3api copy-object --tagging-directive REPLACE` instead, since the
+deployer IAM user lacks `s3:GetObjectTagging` and plain `mv`/`cp` on
+objects it can't read tags from fails) - verified sizes matched exactly
+before deleting the old-path originals. No code change needed; this was a
+one-time data migration to match the new convention. Confirmed via S3 and
+the live API afterward that the manifest resolves correctly again.
+
+Separately confirmed nothing was deleted by today's schema migration:
+Aspen Acres' Acquisition #1 shows "predates figure/download support" not
+because anything was removed, but because that run genuinely happened
+before `entrypoint.py` started writing a `files` manifest at all (it's
+literally the very first successful run this build, from before the
+buildings-perimeter-clip fix - the 1059/3244 "destroyed" count on display
+is the exact pre-fix bug value). Its 600MB of raw S3 output is still
+sitting at the old flat path, untouched, orphaned rather than deleted.
+
+## Add: permanent delete for individual acquisitions (2026-08-01)
+Raised directly by the Aspen Acres investigation above - that stale,
+buggy, pre-fix run is a good first real deletion candidate, and there
+was no way to actually remove one short of manual AWS CLI/DB work.
+- `DELETE /api/fires/{fire_id}/acquisitions/{sequence}` (admin-gated):
+  deletes every S3 object under that acquisition's own
+  `acquisitions/{fire_id}/{sequence}/` prefix, then the DB row. Rejected
+  with 400 while status is `processing` - a live Batch job would keep
+  running with nothing left to report its result to. Unlike `unmark`
+  (drafts only), this works for any terminal status, since it's for
+  deliberately discarding a real, finished (or failed) run, not just
+  abandoning an unconfirmed draft.
+- Frontend: a small trash icon on each acquisition tab (disabled + tooltip
+  while processing), gated behind a new `ConfirmDialog` component - a
+  plain in-page modal, not `window.confirm()`, for the same reason
+  `AdminKeyModal` avoided `window.prompt()` earlier in the build (embedded
+  browser views like VSCode's preview pane silently no-op native browser
+  dialogs). Deletion is permanent with no undo, so the dialog says so
+  explicitly before the request fires.
+
 ## Backlog: multi-acquisition UX per fire (2026-08-01, raised, then resolved same day)
 Current schema/UI assumes exactly one acquisition in flight per fire ever
 (`acquisition_status` etc. are columns on `Fire` itself, not a history

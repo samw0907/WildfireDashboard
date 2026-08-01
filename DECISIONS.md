@@ -874,6 +874,23 @@ labels changed from generic "Before"/"After" to "Before ignition"/"After
 ignition" throughout, since "before/after" alone was ambiguous about
 before/after *what*.
 
+## Permanent acquisition delete: guard + confirm-UX choices (2026-08-01)
+Added alongside the multi-acquisition work above, once a concrete need
+appeared (a stale, pre-fix Aspen Acres run with no working downloads).
+Two small decisions worth recording since they're easy to get wrong on a
+genuinely irreversible action:
+- **Blocked while `processing`, allowed for every other status** - a live
+  Batch job deleted mid-run would keep running with no acquisition row
+  left to report its result to, and no way to ever see whether it
+  succeeded or failed. `marked`/`complete`/`failed` are all safe to
+  delete since nothing is still writing to them.
+- **Confirm via an in-page modal (`ConfirmDialog`), not `window.confirm()`**
+  - matches the reasoning already logged for `AdminKeyModal` avoiding
+  `window.prompt()`: confirmed live that embedded browser views (VSCode's
+  preview pane) silently no-op native browser dialogs instead of showing
+  one. A real DOM modal works in every context a page can render in, and
+  a destructive, no-undo action deserves that reliability more than most.
+
 ## Standing process decisions (ongoing, not one-time)
 - Never commit or push on the user's behalf — always end a working turn
   with copy-pasteable `git add` / `git commit` / `git push` commands

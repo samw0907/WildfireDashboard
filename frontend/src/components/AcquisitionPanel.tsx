@@ -4,6 +4,7 @@ import {
   acquisitionDownloadUrl,
   confirmAcquisition,
   createAcquisition,
+  deleteAcquisition,
   getAcquisitionCandidates,
   listAcquisitions,
   selectAcquisitionScenes,
@@ -15,7 +16,8 @@ import {
   type Scene,
 } from '../api'
 import { StatCard } from './StatCard'
-import { AreaIcon, BuildingIcon, FlameIcon } from './icons'
+import { AreaIcon, BuildingIcon, FlameIcon, TrashIcon } from './icons'
+import { ConfirmDialog } from './ConfirmDialog'
 import { Lightbox } from './Lightbox'
 
 // Friendly labels for buildings.py's classify_damage()/flag_geometry_limited()
@@ -228,6 +230,7 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onCo
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Acquisition | null>(null)
 
   const activeAcquisition = acquisitions.find((a) => a.sequence === activeSequence) ?? null
   // Only one acquisition per fire can be non-terminal at a time (enforced
@@ -407,20 +410,36 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onCo
       {acquisitions.length > 0 && (
         <div className="acquisition-tabs">
           {acquisitions.map((a) => (
-            <button
-              key={a.sequence}
-              className={`acquisition-tab${a.sequence === activeSequence ? ' acquisition-tab--active' : ''}`}
-              onClick={() => {
-                setActiveSequence(a.sequence)
-                resetLocalSelection()
-              }}
-            >
-              <span className="acquisition-tab-title">
-                Acquisition #{a.sequence}
-                {acquisitionDateRange(a) && <span className="acquisition-tab-sub">{acquisitionDateRange(a)}</span>}
-              </span>
-              <span className={`acquisition-tab-status acquisition-tab-status--${a.status}`}>{a.status}</span>
-            </button>
+            <div key={a.sequence} className="acquisition-tab-wrapper">
+              <button
+                className={`acquisition-tab${a.sequence === activeSequence ? ' acquisition-tab--active' : ''}`}
+                onClick={() => {
+                  setActiveSequence(a.sequence)
+                  resetLocalSelection()
+                }}
+              >
+                <span className="acquisition-tab-title">
+                  Acquisition #{a.sequence}
+                  {acquisitionDateRange(a) && <span className="acquisition-tab-sub">{acquisitionDateRange(a)}</span>}
+                </span>
+                <span className={`acquisition-tab-status acquisition-tab-status--${a.status}`}>{a.status}</span>
+              </button>
+              <button
+                className="acquisition-tab-delete"
+                disabled={busy || a.status === 'processing'}
+                title={
+                  a.status === 'processing'
+                    ? 'Wait for this acquisition to finish before deleting it'
+                    : `Permanently delete Acquisition #${a.sequence}`
+                }
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteTarget(a)
+                }}
+              >
+                <TrashIcon />
+              </button>
+            </div>
           ))}
           <button
             className="acquisition-tab acquisition-tab--new"
@@ -435,6 +454,20 @@ export function AcquisitionPanel({ fireId, onScenesChange, onResultsChange, onCo
             + New
           </button>
         </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title={`Delete Acquisition #${deleteTarget.sequence}?`}
+          message="This permanently removes its stored results (rasters, figures, GeoJSON) from S3 and its database record. This cannot be undone."
+          confirmLabel="Delete permanently"
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            const target = deleteTarget
+            setDeleteTarget(null)
+            run(() => deleteAcquisition(fireId, target.sequence), 'Could not delete this acquisition.')
+          }}
+        />
       )}
 
       {acquisitions.length === 0 && (

@@ -395,3 +395,42 @@ def unmark_acquisition(fire_id: str, sequence: int, db: Session = Depends(get_db
     db.delete(acquisition)
     db.commit()
     return {"status": "unmarked"}
+
+
+@router.delete("/fires/{fire_id}/acquisitions/{sequence}", dependencies=[Depends(require_admin_key)])
+def delete_acquisition(fire_id: str, sequence: int, db: Session = Depends(get_db)):
+    """Permanently deletes an acquisition's DB row and its stored S3
+    results - unlike unmark (drafts only), this works for any terminal
+    status ('marked', 'complete', 'failed'), for deliberately discarding
+    an outdated or superseded run. Blocked on 'processing' - a live Batch
+    job would keep running with nothing left to report its result to, and
+    no way to see whether it succeeded or failed."""
+    _get_fire_or_404(db, fire_id)
+    acquisition = _get_acquisition_or_404(db, fire_id, sequence)
+    if acquisition.status == "processing":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Acquisition #{sequence} is still processing - wait for it to finish before deleting",
+        )
+
+    settings = get_settings()
+    client = boto3.client("s3", region_name=settings.aws_region)
+    prefix = f"acquisitions/{fire_id}/{sequence}/"
+    paginator = client.get_paginator("list_objects_v2")
+    keys = [
+        obj["Key"]
+        for page in paginator.paginate(Bucket=settings.sar_results_bucket, Prefix=prefix)
+        for obj in page.get("Contents", [])
+    ]
+    if keys:
+        # delete_objects caps at 1000 keys per call - chunk defensively
+        # even though one acquisition never produces close to that many.
+        for i in range(0, len(keys), 1000):
+            chunk = keys[i : i + 1000]
+            client.delete_objects(
+                Bucket=settings.sar_results_bucket, Delete={"Objects": [{"Key": k} for k in chunk]}
+            )
+
+    db.delete(acquisition)
+    db.commit()
+    return {"status": "deleted", "s3_objects_deleted": len(keys)}

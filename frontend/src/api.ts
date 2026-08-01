@@ -271,6 +271,15 @@ export function unmarkAcquisition(fireId: string, sequence: number): Promise<unk
   return authenticatedRequest(`/api/fires/${fireId}/acquisitions/${sequence}/unmark`, { method: 'POST' })
 }
 
+// Permanently deletes an acquisition's DB row and its stored S3 results -
+// unlike unmark (drafts only), this works for any terminal status
+// ('marked', 'complete', 'failed'), for deliberately discarding an
+// outdated or superseded run. Rejected by the backend while 'processing'.
+// No undo - callers should confirm with the user before calling this.
+export function deleteAcquisition(fireId: string, sequence: number): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${fireId}/acquisitions/${sequence}`, { method: 'DELETE' })
+}
+
 export function exposureAtBand(exposure: ExposureStat[], bufferMeters: number): ExposureStat | undefined {
   return exposure.find((e) => e.buffer_meters === bufferMeters)
 }
