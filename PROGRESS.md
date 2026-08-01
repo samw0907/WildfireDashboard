@@ -227,6 +227,15 @@ behind anything marked as a real choice, not just what got built.
     layer wasn't judged worth adding on its own. The methodologically
     real version (network/isochrone travel-time analysis) is a genuine
     future idea, not a quick add.
+- [ ] **Scene-picker map visibility during selection** (2026-08-01 idea,
+      not fixed - genuinely low priority right now): the acquisition
+      panel (scene picker) now sits below the exposure stats section on
+      Fire Detail, so the map showing scene footprints while picking is
+      often scrolled out of view - the footprint-highlighting UX is a bit
+      redundant if you can't see it while actually picking. Low priority
+      for now (this is a solo-triggered demo, not a multi-user flow), but
+      worth revisiting later - e.g. a sticky/pinned mini-map next to the
+      picker, or moving the picker back above the fold.
 - [ ] **Fire Detail history/timeline** (2026-07-30 idea, shelved - real
       schema work, not a quick add): user asked about scrubbing day-by-day
       through a fire's perimeter/stat changes over its lifetime. Checked
@@ -845,6 +854,64 @@ loop scene picking instead.
         --noEmit` and `py_compile` both clean. **Not yet rebuilt/pushed/
         deployed or run against a real fire** - queued behind the user
         confirming they're happy with the design.
+  - [x] **First real run under the hardened pipeline (2026-08-01, Aspen
+        Acres re-run, single-pair) - two real findings, both acted on**:
+        1. **Fixed vs. adaptive threshold disagreement was large, not
+           theoretical**: 370 destroyed under the fixed 2.9dB value vs.
+           204 under this fire's own 9.86dB adaptive one - only 55% of
+           comparably-classified buildings agreed. Decided (with the
+           user): **adaptive becomes the primary/headline classification**
+           whenever one is found (fixed stays as the stable cross-fire
+           reference and automatic fallback for fires with no clean
+           bimodal split) - see `SAR_PIPELINE_REDESIGN.md` §1.4's revised
+           entry for the full reasoning, including why chasing a
+           "better" universal fixed constant (or a latitude/biome-based
+           one) isn't the right lever: no such universal value exists in
+           the literature, and adaptive thresholding is already the
+           principled answer to cross-region generalization.
+        2. **741 of 3,244 buildings (23%) were `no_data` purely from a
+           zonal-stats sampling technicality**, not lack of real data or
+           an OSM coverage gap - confirmed by directly sampling the raw
+           unclipped raster at their exact locations (all had real
+           signal; 0% were genuine sensor voids) and checking they sat
+           *inside* the fire's own perimeter. Cause: `zonal_stats`'
+           default centroid-only pixel-inclusion rule misses a building
+           entirely if it's smaller than one ~20m pixel and doesn't
+           happen to contain a pixel center - already a known, previously
+           -accepted tradeoff (SAR_METHODOLOGY.md §1.6), but this is the
+           first time its real cost was measured on an actual fire.
+           **Fixed with a narrowly-scoped single retry** (never a blanket
+           `all_touched=True` switch): a building that already samples
+           fine is untouched; only one that comes back completely empty
+           gets one retry with the looser rule, applied identically to
+           both the change raster and the LIA raster for consistency.
+           Which buildings went through the fallback is tracked and
+           disclosed (`fallback_sampled_count`), not silently blended in.
+           Synthetically tested: a building with a clean centroid hit is
+           provably untouched by the fallback; a building straddling a
+           pixel boundary with no centroid inside correctly falls through
+           to and is rescued by the fallback; a building genuinely outside
+           the raster entirely stays `no_data` even after the fallback
+           attempt (nothing fabricated).
+        **Implementation note**: swapped which field `classify_damage()`
+        treats as primary (`damage_class` = adaptive-preferred,
+        `damage_class_fixed` = always-computed reference) rather than
+        touching every downstream consumer - the map, figures,
+        corroboration check, and hotspot selection all already read the
+        generic `damage_class` field and needed zero changes. Figures now
+        display whichever threshold is actually primary (previously
+        hardcoded to the fixed 2.9dB value regardless). `result_summary.
+        json` gained `primary_threshold_db`, `building_damage_counts_
+        fixed` (renamed from `_adaptive`, now always populated), and
+        `fallback_sampled_count`; frontend (`AcquisitionPanel.tsx`,
+        `Reference.tsx`) copy rewritten to describe the new primary/
+        secondary framing rather than "two thresholds, no priority
+        between them". `py_compile`/`tsc --noEmit` both clean; new
+        synthetic unit tests cover the primary/fixed swap, the no-
+        adaptive fallback (`damage_class` == `damage_class_fixed`,
+        confidence all `n/a`), and the sampling fallback described above.
+        **Not yet rebuilt/pushed/deployed or re-run** - queued behind the
+        user's push of this round's changes.
 - [x] `CDSE_USER`/`CDSE_PASSWORD` added to `.env` by the user (2026-07-29) -
       not yet consumed by any code (scene *search* needs no auth; these
       will be needed once actual scene *download* is built as part of

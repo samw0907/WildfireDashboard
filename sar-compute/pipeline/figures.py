@@ -200,6 +200,7 @@ def make_backscatter_panel(
     post_vv_path: str,
     change_combined_path: str,
     threshold_db: float,
+    threshold_label: str,
     output_path: str,
 ) -> None:
     """Pre-event / post-event / change-magnitude 3-panel, all sharing the
@@ -227,7 +228,7 @@ def make_backscatter_panel(
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     im = axes[2].imshow(change, cmap="Reds", vmin=0, vmax=max(threshold_db * 2, np.nanpercentile(change, 99)))
-    axes[2].set_title(f"Change magnitude (dB) — threshold {threshold_db}")
+    axes[2].set_title(f"Change magnitude (dB) — {threshold_label}")
     axes[2].set_axis_off()
     fig.colorbar(im, ax=axes[2], fraction=0.046, pad=0.04)
 
@@ -238,6 +239,7 @@ def make_backscatter_panel(
 def make_perimeter_change_map(
     change_combined_clipped_path: str,
     threshold_db: float,
+    threshold_label: str,
     output_path: str,
 ) -> None:
     """The fire-specific counterpart to make_backscatter_panel's full-scene
@@ -250,7 +252,7 @@ def make_perimeter_change_map(
     fig = Figure(figsize=(8, 8))
     ax = fig.add_subplot(111)
     im = ax.imshow(np.clip(change, 0, None), cmap="Reds", vmin=0, vmax=max(threshold_db * 2, np.nanpercentile(change, 99)))
-    ax.set_title(f"Change Magnitude — Clipped to Fire Perimeter (threshold {threshold_db} dB)")
+    ax.set_title(f"Change Magnitude — Clipped to Fire Perimeter ({threshold_label})")
     ax.set_axis_off()
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -266,6 +268,7 @@ def run_figures(
     change_combined_path: str,
     change_combined_clipped_path: str,
     threshold_db: float,
+    threshold_label: str,
     output_dir: str,
 ) -> dict[str, str]:
     """Generates all figures, returning {label: local_path} for whichever
@@ -290,14 +293,14 @@ def run_figures(
 
     try:
         path = os.path.join(output_dir, "backscatter_panel.png")
-        make_backscatter_panel(pre_vv_path, post_vv_path, change_combined_path, threshold_db, path)
+        make_backscatter_panel(pre_vv_path, post_vv_path, change_combined_path, threshold_db, threshold_label, path)
         outputs["backscatter_panel"] = path
     except Exception:
         logger.exception("Backscatter panel generation failed - continuing without it")
 
     try:
         path = os.path.join(output_dir, "perimeter_change_map.png")
-        make_perimeter_change_map(change_combined_clipped_path, threshold_db, path)
+        make_perimeter_change_map(change_combined_clipped_path, threshold_db, threshold_label, path)
         outputs["perimeter_change_map"] = path
     except Exception:
         logger.exception("Perimeter change map generation failed - continuing without it")

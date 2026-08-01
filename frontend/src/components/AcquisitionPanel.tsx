@@ -751,16 +751,25 @@ export function AcquisitionPanel({
                       assessed
                       {excluded > 0 && ` · ${excluded} excluded (no data / geometry-limited)`}
                     </p>
-                    {result.adaptive_threshold_db != null && result.confidence_counts && (
+                    {result.adaptive_threshold_db != null && result.confidence_counts ? (
                       <p className="acquisition-minor-stats">
-                        Cross-checked against a second, adaptive threshold derived from this fire's own signal
-                        (<strong>{result.adaptive_threshold_db.toFixed(2)} dB</strong>, vs. the fixed{' '}
-                        <strong>{result.threshold_db} dB</strong> default): {result.confidence_counts.corroborated ?? 0}{' '}
-                        buildings agree under both methods
+                        The numbers above use <strong>this fire's own adaptive threshold</strong> (
+                        <strong>{result.adaptive_threshold_db.toFixed(2)} dB</strong>, derived from this fire's own
+                        signal), not a value borrowed from other fires. Cross-checked against the fixed{' '}
+                        <strong>{result.threshold_db} dB</strong> reference value used consistently across every
+                        fire: {result.confidence_counts.corroborated ?? 0} buildings agree under both
                         {(result.confidence_counts.uncertain ?? 0) > 0 &&
-                          `; ${result.confidence_counts.uncertain} are threshold-sensitive (classified differently
-                          depending on which threshold is used) - shown above, not asserted as either answer`}
+                          `; ${result.confidence_counts.uncertain} are threshold-sensitive (would be classified
+                          differently under the fixed reference value) - shown above under the adaptive result,
+                          not asserted with full confidence`}
                         .
+                      </p>
+                    ) : (
+                      <p className="acquisition-minor-stats">
+                        This fire's signal didn't produce a clean adaptive split (little enough real change that
+                        there wasn't a genuine two-population divide to find), so the numbers above use the fixed{' '}
+                        <strong>{result.threshold_db} dB</strong> reference value directly - no second threshold to
+                        cross-check against for this run.
                       </p>
                     )}
                     {(counts.unconfirmed ?? 0) > 0 && (
@@ -771,9 +780,20 @@ export function AcquisitionPanel({
                         trusted on that one pixel alone.
                       </p>
                     )}
+                    {(result.fallback_sampled_count ?? 0) > 0 && (
+                      <p className="acquisition-minor-stats">
+                        {result.fallback_sampled_count} building{result.fallback_sampled_count === 1 ? '' : 's'} -
+                        mostly small, rural structures near Sentinel-1's ~20m pixel size - had no single pixel
+                        centered inside their footprint under the standard sampling rule, and were rescued with a
+                        looser one-time retry rather than left unclassified. Their readings are averaged over a
+                        slightly larger area than most buildings, which sample cleanly.
+                      </p>
+                    )}
                     <p className="acquisition-honesty-note">
-                      Fixed {result.threshold_db} dB change threshold, OpenStreetMap building data - both have real
-                      limitations for a live response.{' '}
+                      {result.primary_threshold_db != null
+                        ? `${result.primary_threshold_db.toFixed(2)} dB change threshold`
+                        : `${result.threshold_db} dB change threshold`}
+                      , OpenStreetMap building data - both have real limitations for a live response.{' '}
                       <Link to="/reference#sar-methodology">Full methodology →</Link>
                     </p>
 

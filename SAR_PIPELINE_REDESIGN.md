@@ -220,6 +220,23 @@ problem" in `SAR_METHODOLOGY.md` §3.
   worth deciding what "uncertain" means procedurally in that case too
   (fall back to fixed-only, most likely).
 
+**Revised again 2026-08-01, after the first real run under this design**:
+on Aspen Acres (a large, mountainous/plains Colorado fire, far outside the
+fixed threshold's Southern-California-chaparral calibration conditions),
+the fixed and adaptive thresholds disagreed on 45% of comparably-
+classified buildings (370 destroyed under fixed vs. 204 under adaptive) -
+not a hypothetical risk anymore, a concretely observed one. Decision:
+**the adaptive threshold is now the primary, headline result** (not just
+a confidence signal alongside a fixed-primary answer) whenever one can be
+found; the fixed value remains a stable, cross-fire-comparable reference
+and the automatic fallback for a fire with no clean bimodal split (not
+deleted - it's also the thing that let this discrepancy get caught in
+the first place). Implemented by swapping which field `classify_damage()`
+treats as primary (`damage_class` = adaptive-preferred, `damage_class_
+fixed` = always-computed reference) rather than rewiring every downstream
+consumer - the map, figures, corroboration check, and hotspot selection
+all already read the generic `damage_class` field and needed no changes.
+
 **Implemented 2026-08-01, exactly as the middle-ground above describes.**
 `change.py`'s `compute_otsu_threshold()` implements Otsu's method from
 scratch in pure numpy (histogram + between-class-variance maximization,
@@ -328,6 +345,57 @@ their own color/legend entry everywhere the other classes appear (map,
 static figures, Fire Detail legend, Reference page). Option 2's
 label-softening was not needed on top - the new class name itself already
 communicates "flagged, not asserted."
+
+### 1.6.1 A second, distinct building-classification gap found on the same real run (2026-08-01)
+
+Investigating a visual "missing buildings" observation on the first real
+run's damage-hotspot figure led to a different, concrete finding, checked
+directly against real data rather than assumed: of 3,244 total buildings,
+2,830 were `no_data`. Sampling the *raw, unclipped* change raster at every
+one of those buildings' locations showed **all 2,830 have real underlying
+data** (0% are genuine sensor voids) - so `no_data` isn't ever "the sensor
+has nothing here" for this fire, it's always either (a) outside the
+perimeter clip (~2,089 buildings - working as designed, most of these
+also carry elevated raw values consistent with the same non-fire regional
+confound the strict clip exists to filter, per the original nodata bug
+fix above) or (b) a second, different mechanism: **741 buildings (23% of
+all buildings) are geometrically *inside* the perimeter, sitting on real
+(often strongly positive) signal, but got no zonal-stats value at all**
+because `zonal_stats(..., nodata=np.nan)` defaults to only counting a
+pixel whose *center* falls inside a building's footprint - and a small
+rural building is frequently smaller than one ~20m Sentinel-1 pixel, so
+it can contain zero pixel centers by pure chance of where it sits on the
+grid, regardless of whether it was actually damaged.
+
+This exact tradeoff (`all_touched=True` vs. the centroid-only default)
+was already considered and deliberately rejected in the original
+methodology, specifically to avoid a small building's zonal mean being
+contaminated by unrelated neighboring ground (SAR_METHODOLOGY.md §1.6).
+That reasoning wasn't wrong, but this is the first time its real-world
+cost has been measured on an actual fire, and 23% of the whole dataset
+is a bigger number than assumed going in.
+
+**Decision: a single, narrowly-scoped retry, not a blanket switch.**
+Standard remote-sensing guidance on zone-size-vs-pixel-size (checked, not
+assumed) is that center-only sampling is right when zones are large
+relative to a pixel (excluding a few edge pixels barely moves a large-
+area mean), but flips once zones are comparable to or smaller than a
+pixel - at that point a large non-response rate is a bigger, and more
+random/non-neutral, source of error than the modest extra neighborhood-
+averaging the looser rule introduces, since which buildings get "unlucky"
+on pixel-center alignment has nothing to do with whether they were
+actually damaged. So: every building is sampled with the standard
+(centroid) rule first, exactly as before, completely unchanged for any
+building that already gets a value from it; *only* a building that comes
+back with nothing is retried once with `all_touched=True`. This can only
+add answers where there were none, never change one that already existed
+- applied identically to both the change raster and the LIA raster (a
+rescued building's terrain-reliability check needs a consistently-sampled
+LIA value too, not a mismatched pair). Which buildings went through the
+fallback is tracked and disclosed (`fallback_sampled_count`, a new
+`used_all_touched_fallback` column) rather than silently blended in -
+combining the "explain it plainly" option with the "rescue the answer"
+option rather than choosing one over the other.
 
 ### 1.7 Output/figures
 Already covered in depth in `SAR_RESULTS_ASSESSMENT.md` §3 (visibility

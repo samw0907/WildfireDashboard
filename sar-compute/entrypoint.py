@@ -152,13 +152,23 @@ def main() -> None:
         burn_gdf=change_result["burn_gdf"],
     )
 
+    # "Primary" is this fire's own adaptive threshold when one was found,
+    # else the fixed reference value (classify_damage()'s own fallback,
+    # mirrored here for the figures/summary display) - see
+    # SAR_PIPELINE_REDESIGN.md §1.4 for why adaptive leads now rather than
+    # the fixed value borrowed from two specific California fires.
+    adaptive_threshold_db = change_result["adaptive_threshold_db"]
+    if adaptive_threshold_db is not None:
+        primary_threshold_db = adaptive_threshold_db
+        threshold_label = f"{primary_threshold_db:.2f} dB (adaptive - this fire's own signal)"
+    else:
+        primary_threshold_db = change.THRESHOLD_COMBINED_DB
+        threshold_label = f"{primary_threshold_db:.2f} dB (fixed reference - no adaptive split found)"
+
     damage_counts = buildings_gdf["damage_class"].value_counts().to_dict()
-    damage_counts_adaptive = (
-        buildings_gdf["damage_class_adaptive"].value_counts().to_dict()
-        if change_result["adaptive_threshold_db"] is not None
-        else {}
-    )
+    damage_counts_fixed = buildings_gdf["damage_class_fixed"].value_counts().to_dict()
     confidence_counts = buildings_gdf["confidence"].value_counts().to_dict()
+    fallback_sampled_count = int(buildings_gdf["used_all_touched_fallback"].sum())
 
     # --- Static figures (matplotlib/contextily) - see pipeline/figures.py
     # for why these came back after being dropped earlier in the build ---
@@ -171,7 +181,8 @@ def main() -> None:
         post_vv_path=post_vv_path,
         change_combined_path=change_result["change_combined_path"],
         change_combined_clipped_path=change_result["change_combined_clipped_path"],
-        threshold_db=change.THRESHOLD_COMBINED_DB,
+        threshold_db=primary_threshold_db,
+        threshold_label=threshold_label,
         output_dir=ANALYSIS_DIR,
     )
 
@@ -202,19 +213,33 @@ def main() -> None:
         "target_crs": target_crs,
         "total_burn_area_ha": change_result["total_area_ha"],
         "burn_patch_count": change_result["patch_count"],
+        # "building_damage_counts" is the PRIMARY result - this fire's own
+        # adaptive threshold when one was found, else the fixed reference
+        # value (see primary_threshold_db above). building_damage_counts_
+        # fixed is the always-computed, cross-fire-comparable reference
+        # breakdown - kept as a secondary/fallback signal, not deleted,
+        # since it's also what let this discrepancy get caught in the
+        # first place (see SAR_PIPELINE_REDESIGN.md §1.4).
         "building_damage_counts": damage_counts,
+        "building_damage_counts_fixed": damage_counts_fixed,
         "total_buildings_classified": int(len(buildings_gdf)),
-        # Adaptive threshold: this fire's own Otsu-derived cutoff, used as
-        # a cross-check against the fixed value below, not a replacement
-        # for it - see SAR_PIPELINE_REDESIGN.md §1.4. None if no valid
-        # clipped data existed to compute one from.
-        "adaptive_threshold_db": change_result["adaptive_threshold_db"],
-        "building_damage_counts_adaptive": damage_counts_adaptive,
-        # How many buildings' fixed-threshold classification agrees with
-        # the adaptive one ("corroborated") vs. disagrees ("uncertain") vs.
-        # wasn't a real comparison at all ("n/a" - no_data/geometry_limited
-        # on at least one side).
+        "primary_threshold_db": primary_threshold_db,
+        # This fire's own Otsu-derived cutoff specifically - None if no
+        # valid clipped data existed to compute one from (primary then
+        # falls back to the fixed value above).
+        "adaptive_threshold_db": adaptive_threshold_db,
+        # How many buildings' primary classification agrees with the fixed
+        # reference one ("corroborated") vs. disagrees ("uncertain") vs.
+        # wasn't a real comparison at all ("n/a" - no_data/geometry_limited/
+        # unconfirmed on at least one side, or no adaptive threshold at all).
         "confidence_counts": confidence_counts,
+        # Buildings rescued by a single all_touched retry after the
+        # standard centroid-based sample found no pixel at all (small
+        # footprint vs. ~20m resolution) - see buildings.py's
+        # _zonal_mean_with_fallback(). These readings are somewhat less
+        # precise (averaged over a slightly larger area) than the majority
+        # of buildings, which sample cleanly under the standard rule.
+        "fallback_sampled_count": fallback_sampled_count,
         # Threshold and building-dataset honesty framing, carried into the
         # output itself, not just docs - see SAR_METHODOLOGY.md §6/§7.
         # Framed on this project's own methodology and its own limitations
@@ -223,10 +248,12 @@ def main() -> None:
         # truth as part of its own workflow (see DECISIONS.md 2026-08-01).
         "threshold_db": change.THRESHOLD_COMBINED_DB,
         "threshold_note": (
-            "A single fixed combined-polarization change threshold is applied the same way to "
-            "every fire, rather than tuned per-incident - a consistent, fast triage signal across "
-            "many fires, not a per-fire-calibrated measurement. Real damage-inspection records "
-            "aren't available in a live response setting to check any individual result against."
+            "The headline result above uses this fire's own adaptive threshold when one could be "
+            "found (computed from this fire's own change-image statistics, no ground truth needed) "
+            "- a fixed value borrowed from two specific California fires has no particular reason to "
+            "transfer to different vegetation, terrain, or climate. The fixed value is still computed "
+            "for every fire as a stable, cross-fire-comparable reference, and as the fallback result "
+            "when a fire's signal doesn't produce a clean adaptive split to begin with."
         ),
         "building_dataset": "OpenStreetMap",
         "building_dataset_note": (

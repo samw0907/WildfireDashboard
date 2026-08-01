@@ -42,9 +42,9 @@ const SAR_PIPELINE_STEPS: PipelineStep[] = [
 ]
 
 const SAR_PARAMS = [
-  { label: 'Damage threshold', value: '2.9 dB' },
+  { label: 'Damage threshold', value: 'Adaptive (per fire), 2.9 dB fixed reference' },
   { label: 'Pixel spacing', value: '20 m' },
-  { label: 'Min patch size', value: '0.1 ha' },
+  { label: 'Min patch size', value: '1.0 ha' },
   { label: 'Composite size', value: '3 scenes/side' },
 ]
 
@@ -314,15 +314,30 @@ export function Reference() {
         <PipelineDiagram steps={SAR_PIPELINE_STEPS} />
         <ParamChips params={SAR_PARAMS} />
         <p>
-          <strong>Every building is classified against two thresholds, not one.</strong> The fixed
-          value shown above is applied identically to every fire, which makes results comparable
-          across fires but was never tuned for any specific one. Alongside it, each fire also gets
-          an <em>adaptive</em> threshold - computed automatically from that fire's own change-image
-          statistics (Otsu's method, a standard unsupervised technique that needs no ground truth to
-          run). Where a building's classification agrees under both the fixed and the adaptive
-          threshold, that's a corroborated result. Where the two disagree, the building is flagged{' '}
-          <em>threshold-sensitive</em> rather than asserted as either answer - a real, visible signal
-          of exactly which classifications are robust to the threshold choice and which aren't.
+          <strong>Every building is classified against two thresholds, not one.</strong> The
+          headline result for each fire uses an <em>adaptive</em> threshold - computed
+          automatically from that fire's own change-image statistics (Otsu's method, a standard
+          unsupervised technique that needs no ground truth to run). A single fixed value, tuned
+          once and applied identically everywhere, has no particular reason to transfer to a fire
+          with very different vegetation, terrain, or climate than whatever it was originally tuned
+          on - and in practice, the two can disagree substantially. The fixed value (shown above) is
+          still computed for every fire, both as a stable, cross-fire-comparable reference and as
+          the automatic fallback when a fire's own signal doesn't produce a clean adaptive split to
+          begin with (too little real change for a genuine two-population divide to exist). Where a
+          building's classification agrees under both, that's a corroborated result. Where the two
+          disagree, the building is flagged <em>threshold-sensitive</em> rather than asserted with
+          full confidence - a real, visible signal of exactly which classifications are robust to
+          the threshold choice and which aren't.
+        </p>
+        <p>
+          A small but real share of buildings - mostly small, rural structures near Sentinel-1's
+          ~20m pixel size - contain no single pixel centered inside their footprint under the
+          standard sampling rule, and would otherwise go entirely unclassified even sitting in the
+          middle of real, confirmed damage. These are rescued with a one-time looser retry (any
+          pixel the footprint touches, not just one whose center falls inside it) rather than left
+          unassessed - their readings are averaged over a slightly larger area than most buildings,
+          which sample cleanly, and the count of buildings sampled this way is shown alongside the
+          results.
         </p>
         <div className="honesty-warning-card">
           <span aria-hidden="true">⚠️</span>

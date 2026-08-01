@@ -169,23 +169,40 @@ export interface AcquisitionResultSummary {
   target_crs: number
   total_burn_area_ha: number
   burn_patch_count: number
+  // PRIMARY result - this fire's own adaptive threshold when one was
+  // found, else the fixed reference value below (see primary_threshold_db).
   building_damage_counts: Record<string, number>
   total_buildings_classified: number
+  // Fixed value borrowed from two specific California fires - always
+  // computed as a stable, cross-fire-comparable reference and the
+  // fallback primary result when a fire has no clean adaptive split.
   threshold_db: number
   threshold_note: string
   building_dataset: string
   building_dataset_note: string
+  // Whichever threshold actually produced building_damage_counts above -
+  // adaptive_threshold_db if not null, else threshold_db.
+  primary_threshold_db?: number | null
   // This fire's own Otsu-derived threshold, computed from its own change-
-  // image statistics as a cross-check against threshold_db (which is
-  // fixed/borrowed from a different fire) - not a replacement for it. Null
-  // (not just absent) on results from before this feature existed, or if
-  // there was no valid clipped data to derive one from.
+  // image statistics. Null (not just absent) on results from before this
+  // feature existed, or if there was no valid clipped data to derive one
+  // from - in which case building_damage_counts falls back to the fixed
+  // breakdown below.
   adaptive_threshold_db?: number | null
-  building_damage_counts_adaptive?: Record<string, number>
-  // How many buildings' fixed-threshold classification agrees
-  // ("corroborated") vs. disagrees ("uncertain") vs. wasn't a real
-  // comparison at all ("n/a" - no_data/geometry_limited on either side).
+  // Always-computed fixed-threshold breakdown - the secondary/reference
+  // result, not the headline one (renamed from building_damage_counts_
+  // adaptive when adaptive became primary).
+  building_damage_counts_fixed?: Record<string, number>
+  // How many buildings' primary classification agrees ("corroborated")
+  // vs. disagrees ("uncertain") vs. wasn't a real comparison at all
+  // ("n/a" - no_data/unconfirmed/geometry_limited on either side, or no
+  // adaptive threshold to compare against) with the fixed reference one.
   confidence_counts?: Record<string, number>
+  // Buildings rescued by a single all_touched retry after the standard
+  // centroid-based sample found no pixel at all (small footprint vs.
+  // ~20m resolution) - somewhat less precise than buildings that sampled
+  // cleanly, but a real reading rather than no answer at all.
+  fallback_sampled_count?: number
   // {label: filename} for every file actually produced - fetch via
   // acquisitionDownloadUrl(fireId, filename), not directly (the results
   // bucket is private, this is a label->filename map, not a URL map).
