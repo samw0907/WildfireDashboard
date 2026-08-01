@@ -206,6 +206,16 @@
   padding: 24px;
 }
 
+.content > * {
+  /* Caps how wide the page content stretches on a large/ultrawide
+     monitor and centers it, rather than letting everything (map, table
+     rows, etc) stretch edge-to-edge - a fast-demo-level fix, not a full
+     responsive redesign. */
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .bottom-tabs {
   display: none;
 }
@@ -453,6 +463,32 @@
   color: var(--text);
   cursor: pointer;
   white-space: nowrap;
+}
+
+.map-basemap-toggle {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.map-basemap-btn {
+  flex: 1;
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.map-basemap-btn--active {
+  border-color: var(--accent-green);
+  background: var(--accent-green-bg);
+  color: var(--accent-green);
+  font-weight: 600;
 }
 
 .maplibregl-popup-content {
@@ -1676,13 +1712,29 @@
   margin-bottom: 14px;
 }
 
-@media (max-width: 768px) {
+/* Widened from 768px (phone-only) - a real laptop display (~1024-1366px
+   logical width) was still trying to cram the map and a 220-280px
+   forecast column side by side here, leaving both too squeezed. Anything
+   at or below "smaller laptop" width now stacks instead; a proper
+   desktop monitor keeps the side-by-side layout. */
+@media (max-width: 1150px) {
   .fire-detail-split {
     flex-direction: column;
     height: auto;
   }
   .fire-detail-map {
-    height: 40vh;
+    height: 45vh;
+  }
+  .forecast-column {
+    max-width: none;
+    width: 100%;
+  }
+  .forecast-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .forecast-list-item {
+    flex: 1 1 160px;
   }
 }
 

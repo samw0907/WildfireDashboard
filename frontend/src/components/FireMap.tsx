@@ -53,6 +53,8 @@ interface FireMapProps {
 const SOURCE_ID = 'fires'
 const FILL_LAYER_ID = 'fires-fill'
 const LINE_LAYER_ID = 'fires-line'
+const SATELLITE_SOURCE_ID = 'satellite'
+const SATELLITE_LAYER_ID = 'satellite-layer'
 const ALERTS_SOURCE_ID = 'alerts'
 const ALERTS_FILL_LAYER_ID = 'alerts-fill'
 const ALERTS_LINE_LAYER_ID = 'alerts-line'
@@ -156,6 +158,11 @@ export function FireMap({
   // Fire Detail page had all three at once. One button + a panel instead.
   const [layersPanelOpen, setLayersPanelOpen] = useState(false)
   const layersPanelRef = useRef<HTMLDivElement>(null)
+  // Street vs satellite basemap - see the satellite-layer setup in the
+  // map-init effect for why this is a visibility toggle between one raster
+  // layer and the base style's own layers, not a full map.setStyle() swap.
+  const [basemap, setBasemap] = useState<'street' | 'satellite'>('street')
+  const baseStyleLayerIdsRef = useRef<string[]>([])
 
   useEffect(() => {
     if (!layersPanelOpen) return
@@ -184,7 +191,10 @@ export function FireMap({
       container: containerRef.current,
       style: 'https://tiles.openfreemap.org/styles/liberty',
       center: [-98.5, 39.8],
-      zoom: 3,
+      // Tightened from 3 - the previous default showed all of Canada/
+      // Mexico/the Caribbean for what's a US-only fire dataset, more than
+      // needed to still show the whole country.
+      zoom: 3.5,
       // Requires Ctrl/Cmd+scroll to zoom (shows an on-map hint on a plain
       // scroll instead) - without this, scrolling the page with the mouse
       // over a large embedded map hijacks the scroll as a zoom gesture
@@ -194,6 +204,33 @@ export function FireMap({
     mapRef.current = map
 
     map.on('load', () => {
+      // Satellite basemap toggle: rather than swapping the whole style
+      // (which would wipe every source/layer we add below and force
+      // re-adding them all after every switch), keep the vector "Liberty"
+      // style always loaded and add one raster layer underneath it - the
+      // toggle just flips visibility between "this raster layer" and
+      // "every layer already in the base style", captured here before we
+      // add anything of our own so this list is exactly the base style's
+      // own layers, nothing more.
+      baseStyleLayerIdsRef.current = (map.getStyle().layers ?? []).map((l) => l.id)
+      map.addSource(SATELLITE_SOURCE_ID, {
+        type: 'raster',
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        ],
+        tileSize: 256,
+        attribution: 'Esri, Maxar, Earthstar Geographics',
+      })
+      map.addLayer(
+        {
+          id: SATELLITE_LAYER_ID,
+          type: 'raster',
+          source: SATELLITE_SOURCE_ID,
+          layout: { visibility: 'none' },
+        },
+        baseStyleLayerIdsRef.current[0],
+      )
+
       // Alerts added first (bottom of stack) - covers huge regional areas,
       // shouldn't visually dominate the fire-specific layers above it.
       map.addSource(ALERTS_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
@@ -499,6 +536,17 @@ export function FireMap({
     if (map.getLayer(afterId)) map.setLayoutProperty(afterId, 'visibility', visibility)
   }, [sceneFootprintsVisible])
 
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const satelliteVisibility = basemap === 'satellite' ? 'visible' : 'none'
+    const streetVisibility = basemap === 'street' ? 'visible' : 'none'
+    if (map.getLayer(SATELLITE_LAYER_ID)) map.setLayoutProperty(SATELLITE_LAYER_ID, 'visibility', satelliteVisibility)
+    for (const id of baseStyleLayerIdsRef.current) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', streetVisibility)
+    }
+  }, [basemap])
+
   // One-time auto-collapse: the moment scenesConfirmed flips from false to
   // true (scenes just confirmed, or an already-confirmed fire just
   // loaded), hide the footprints layer by default. Guarded by the ref so
@@ -514,13 +562,13 @@ export function FireMap({
   const hasAlertsToggle = !!(enableAlerts && alerts && alerts.features.length > 0)
   const hasBuildingsToggle = !!(buildings && buildings.features.length > 0)
   const hasSceneFootprintsToggle = (sceneFootprints?.before?.length ?? 0) > 0 || (sceneFootprints?.after?.length ?? 0) > 0
-  const hasAnyLayerToggle = hasAlertsToggle || hasBuildingsToggle || hasSceneFootprintsToggle
-
   return (
     <div className="fire-map-container">
       <div ref={containerRef} className="fire-map" />
-      {hasAnyLayerToggle && (
-        <div ref={layersPanelRef} className="map-layers-control">
+      {/* Always rendered - the basemap (street/satellite) toggle applies
+          to every map instance regardless of whether any of the
+          data-driven layer toggles below happen to apply. */}
+      <div ref={layersPanelRef} className="map-layers-control">
           <button
             className="map-layers-btn"
             onClick={() => setLayersPanelOpen((o) => !o)}
@@ -531,6 +579,20 @@ export function FireMap({
           </button>
           {layersPanelOpen && (
             <div className="map-layers-panel">
+              <div className="map-basemap-toggle">
+                <button
+                  className={basemap === 'street' ? 'map-basemap-btn map-basemap-btn--active' : 'map-basemap-btn'}
+                  onClick={() => setBasemap('street')}
+                >
+                  Street
+                </button>
+                <button
+                  className={basemap === 'satellite' ? 'map-basemap-btn map-basemap-btn--active' : 'map-basemap-btn'}
+                  onClick={() => setBasemap('satellite')}
+                >
+                  Satellite
+                </button>
+              </div>
               {hasAlertsToggle && (
                 <label
                   className="map-layers-option"
@@ -573,7 +635,6 @@ export function FireMap({
             </div>
           )}
         </div>
-      )}
     </div>
   )
 }
