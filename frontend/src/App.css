@@ -1704,6 +1704,12 @@
 }
 
 .exposure-band-card {
+  /* min-width: 0 - a grid item defaults to never shrinking below its own
+     content's natural width, same underlying issue as the grid-track fix
+     above (minmax(0, 1fr)) but one level deeper: that fix let the *column*
+     shrink, this lets the *card itself*, sitting in that column, actually
+     shrink to match rather than overflowing past its column's edge. */
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
@@ -1722,7 +1728,13 @@
 
 .exposure-band-stats {
   display: flex;
-  gap: 20px;
+  /* Wrap, not a fixed row - if the card gets narrow enough that both
+     stats (buildings + population) genuinely can't fit side by side even
+     once they're allowed to shrink, the second one drops to its own line
+     instead of the only other option (forcing the row wider than the
+     card). */
+  flex-wrap: wrap;
+  gap: 12px 20px;
   margin-bottom: 8px;
 }
 
@@ -1730,6 +1742,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Same min-width: 0 fix as .exposure-band-card above, one level deeper
+     still - a flex child also defaults to a content-based minimum width
+     unless told otherwise, which is what let the number text push past
+     the card's own edge even after the card itself could shrink. */
+  min-width: 0;
 }
 
 .band-dot {
