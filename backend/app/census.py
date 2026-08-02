@@ -10,11 +10,40 @@ is all Phase 1 needs), and reuses patterns already in this codebase
 of adding raster-processing infrastructure.
 """
 
+import time
 from dataclasses import dataclass
 
 import httpx
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
+
+# A failure here wipes population_est for every band on a fire until its
+# next recompute cycle (see exposure.py's all-or-nothing degrade), so a
+# same-cycle retry is worth it - unlike Overpass, where overload tends to
+# be sustained rather than momentary. Only retries transient failures
+# (429/5xx/network) - a bad request or invalid key fails on attempt one,
+# since retrying those wastes the budget for no benefit.
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 2.0  # 2s, 4s between attempts
+
+
+def _get_with_retry(client: httpx.Client, url: str, params: dict) -> httpx.Response:
+    last_exc: Exception | None = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = client.get(url, params=params)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status != 429 and status < 500:
+                raise
+            last_exc = exc
+        except httpx.TransportError as exc:
+            last_exc = exc
+        if attempt < MAX_RETRIES - 1:
+            time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+    raise last_exc
 
 TIGERWEB_URL = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Tracts_Blocks/MapServer/1/query"
 # Bumped from 2022 to 2024 (2026-08-01) - confirmed live that the 2024
@@ -46,7 +75,8 @@ def fetch_block_groups_in_bbox(
     client = client or httpx.Client(timeout=30.0)
 
     try:
-        response = client.get(
+        response = _get_with_retry(
+            client,
             TIGERWEB_URL,
             params={
                 "geometry": f"{min_lon},{min_lat},{max_lon},{max_lat}",
@@ -58,7 +88,6 @@ def fetch_block_groups_in_bbox(
                 "f": "geojson",
             },
         )
-        response.raise_for_status()
         data = response.json()
 
         block_groups = []
@@ -102,7 +131,8 @@ def fetch_population_by_geoid(
     try:
         counties = {(bg.state_fips, bg.county_fips) for bg in block_groups}
         for state_fips, county_fips in counties:
-            response = client.get(
+            response = _get_with_retry(
+                client,
                 ACS_URL,
                 params={
                     "get": POPULATION_VARIABLE,
@@ -111,7 +141,6 @@ def fetch_population_by_geoid(
                     "key": api_key,
                 },
             )
-            response.raise_for_status()
             rows = response.json()
             header, *data_rows = rows
             idx = {name: i for i, name in enumerate(header)}

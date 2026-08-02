@@ -204,34 +204,29 @@ export function Reference() {
           block group's land area (dasymetric weighting).</strong> For every block group that
           overlaps a fire's buffer, this tool fetches its actual OSM building count, divides the
           block group's Census population evenly across those buildings, then counts only the
-          buildings that actually fall inside a given buffer band. A small fire's buffer clipping
-          a mostly-empty corner of a huge rural block group is no longer credited with a share of
-          population proportional to <em>land area</em> - it only gets credit for the population
-          attributed to whichever real buildings happen to sit inside it.
+          buildings that actually fall inside a given buffer band - so a fire's buffer clipping a
+          mostly-empty corner of a huge rural block group only gets credit for the population
+          attributed to whichever real buildings sit inside it, not a share proportional to land
+          area. A block group with zero OSM buildings mapped at all falls back to plain areal
+          weighting instead, since there's nothing to distribute against - this tool is honestly a
+          hybrid, not a clean replacement.
         </p>
         <p>
-          This replaced a simpler areal-weighted method (
-          <code>population × fraction of the block group's area inside the buffer</code>) after it
-          produced a genuinely implausible real result - a fire with only 3 buildings in its
-          perimeter was attributed 564 people, because its buffer happened to clip a sliver of a
-          huge, sparse block group whose real population lived elsewhere within that same polygon.
-          Dasymetric mapping (building- or settlement-weighted redistribution, rather than assuming
-          uniform density) is the standard answer to exactly this failure mode - not something
-          invented for this project, and in fact the same idea behind why WorldPop's gridded
-          population product (considered earlier, dropped over hosted-API reliability issues, not
-          accuracy) would have handled this case better than plain Census areal weighting.
+          <strong>Real limitations that remain:</strong> not every OSM "building" is a residence -
+          barns, sheds, and commercial structures typically carry the same generic{' '}
+          <code>building=yes</code>-style tag, and rural OSM tagging is usually too inconsistent to
+          filter down to just houses - so building <em>count</em> is a proxy for occupancy, not a
+          direct measure of it. And fundamentally, this is a modeled estimate with no ground truth to
+          check it against for any specific fire.
         </p>
         <p>
-          <strong>Real limitations that remain, even with this improvement:</strong> not every OSM
-          "building" is a residence - barns, sheds, and commercial/industrial structures all
-          typically carry the same generic <code>building=yes</code>-style tag, and rural OSM
-          tagging is usually too inconsistent to reliably filter down to just houses, so building{' '}
-          <em>count</em> is a proxy for occupancy, not a direct measure of it. A block group with
-          real population but zero OSM buildings mapped at all (a genuine coverage gap, not
-          hypothetical) has nothing for dasymetric weighting to distribute against, so that specific
-          block group falls back to the older areal-weighted method instead - this tool is
-          honestly a hybrid, not a clean replacement. And fundamentally, this is still a modeled
-          estimate with no ground truth to check it against for any specific fire, same as before.
+          <strong>Population numbers shown throughout this app are for reference only</strong> -
+          they're never used in the priority score (see below). Building counts come from a single
+          real OSM fetch per fire; population additionally depends on a second external API (Census
+          ACS) with real reliability gaps of its own - an outage or rate-limit can leave population
+          temporarily blank for a fire until its next recompute, a failure mode building counts alone
+          don't share. Treat the population figures as an illustrative estimate of scale, not a
+          precise or always-current count.
         </p>
       </section>
 
@@ -263,19 +258,14 @@ export function Reference() {
           range otherwise).
         </p>
         <p>
-          <strong>Population is not scored separately at all</strong> - a change from an earlier
-          version of this formula (20 building + 20 population points, 40 total). Since population
-          is now itself computed from local building density (dasymetric weighting, see{' '}
-          <a href="#population-methodology">above</a>), scoring both meant double-counting the same
-          underlying signal rather than adding an independent one - so building's own weight was
-          doubled to 40 instead. Building exposure is also log-transformed now, not linear -
-          confirmed necessary on real data: a fire with ~700 buildings nearby was scoring{' '}
-          <em>below</em> one with only 14, because a single unrelated outlier fire elsewhere in the
-          list (13,000+ buildings) dominated the normalization and crushed every other fire's raw
-          building count toward zero. Log-transforming it (the same fix already used for acreage,
-          for the same right-skew reason) fixed the ranking to match what a human reviewer would
-          expect: more buildings at risk is the bigger concern, even at a somewhat smaller or more-
-          contained fire.
+          <strong>Population isn't part of this score at all</strong> - all 40 exposure points come
+          from buildings. Two reasons: population is itself derived from local building density
+          (dasymetric weighting, see <a href="#population-methodology">above</a>), so scoring both
+          would double-count the same signal rather than adding an independent one; and population
+          depends on a second external API (Census) with real reliability gaps building counts alone
+          don't share, making it the less trustworthy of the two to rank fires on. Building exposure
+          is log-transformed (like acreage, for the same reason) so a handful of very dense-urban
+          fires can't dominate the normalization and flatten the signal for every other fire.
         </p>
         <p>
           Deliberately <strong>not</strong> scored: NIMS incident complexity type (1-5, still shown
@@ -331,20 +321,12 @@ export function Reference() {
           reasoning behind each of these choices, not just the parameters themselves.
         </p>
         <p>
-          <strong>Every building is classified against two thresholds, not one.</strong> The
-          headline result for each fire uses an <em>adaptive</em> threshold - computed
-          automatically from that fire's own change-image statistics (Otsu's method, a standard
-          unsupervised technique that needs no ground truth to run). A single fixed value, tuned
-          once and applied identically everywhere, has no particular reason to transfer to a fire
-          with very different vegetation, terrain, or climate than whatever it was originally tuned
-          on - and in practice, the two can disagree substantially. The fixed value (shown above) is
-          still computed for every fire, both as a stable, cross-fire-comparable reference and as
-          the automatic fallback when a fire's own signal doesn't produce a clean adaptive split to
-          begin with (too little real change for a genuine two-population divide to exist). Where a
-          building's classification agrees under both, that's a corroborated result. Where the two
-          disagree, the building is flagged <em>threshold-sensitive</em> rather than asserted with
-          full confidence - a real, visible signal of exactly which classifications are robust to
-          the threshold choice and which aren't.
+          <strong>Every building is classified against two thresholds, not one</strong> - an
+          adaptive (Otsu) threshold computed fresh from that fire's own signal, and a fixed reference
+          value (see <a href="#sar-design-choices">why below</a>). Where the two agree, that's a
+          corroborated result; where they disagree, the building is flagged{' '}
+          <em>threshold-sensitive</em> rather than asserted with full confidence - a visible signal
+          of which classifications are robust to the threshold choice and which aren't.
         </p>
         <p>
           A small but real share of buildings - mostly small, rural structures near Sentinel-1's
@@ -378,25 +360,17 @@ export function Reference() {
         <ul>
           <li>
             <strong>This is a damage assessor for a known fire, not a fire detector.</strong> Fire
-            location and timing come entirely from NIFC - the pipeline never independently confirms
-            that a detected change is actually fire-caused. Run the same threshold logic on an
-            arbitrary patch of this same Sentinel-1 scene with no fire anywhere nearby (a mountain
-            range mid-snowmelt, for instance) and it would very plausibly come back looking just as
-            "damaged" - nothing in the backscatter signal itself distinguishes fire from snowmelt,
-            vegetation growth, or any other land-cover change. This isn't a shortcut unique to this
-            project: real operational systems mostly work the same way, since "is a fire happening,
-            right now, here" is usually solved by an entirely different sensor family - thermal-
-            anomaly detection (e.g. MODIS/VIIRS active-fire hotspots), which directly senses heat and
-            genuinely can't be confused with snowmelt. NIFC's own incident data sits downstream of
-            exactly that kind of detection. SAR/optical change detection is then dispatched{' '}
-            <em>to an already-identified location</em> to assess extent and damage, not to discover
-            fires blindly. Where this could genuinely be strengthened without abandoning the
-            approach: a single before/after pair can't distinguish fire's own temporal signature (an
-            abrupt drop, then a slow, partial <em>recovery</em> over following weeks as vegetation
-            regrows) from a smoother, often-reversible seasonal shift like snowmelt - a real
-            multi-date time series, not just two snapshots, is what the wider literature uses to
-            tell these apart, alongside fusing in independent thermal-anomaly data directly rather
-            than relying solely on an already-known perimeter.
+            location and timing come entirely from NIFC - nothing in the backscatter signal itself
+            distinguishes fire-caused change from snowmelt, vegetation growth, or other land-cover
+            change elsewhere in the same scene. That's not a shortcut unique to this project: real
+            operational systems mostly work the same way, since "is a fire happening, right now,
+            here" is usually solved by a different sensor family entirely - thermal-anomaly detection
+            (e.g. MODIS/VIIRS), which directly senses heat. SAR/optical change detection is then
+            dispatched <em>to an already-identified location</em> to assess extent and damage, not to
+            discover fires blindly. A genuine strengthening here, not currently built: a real
+            multi-date time series (distinguishing fire's abrupt-drop-then-partial-recovery signature
+            from a smoother, reversible shift like snowmelt) plus fusing in independent thermal data,
+            rather than relying solely on an already-known perimeter.
           </li>
           <li>
             <strong>Built on Sentinel-1 - free and openly accessible, which is what makes a
@@ -429,11 +403,9 @@ export function Reference() {
             reliability, never presented with the same confidence.
           </li>
           <li>
-            <strong>Minimum mapping unit raised to 1.0ha.</strong> Real burned-area practice
-            commonly runs 1-6+ hectares as a noise floor; a much finer value inherited early in this
-            project's build let far more small noise fragments survive the filter than standard
-            practice would, visible directly as a "checkerboard" burn-area appearance before this was
-            corrected.
+            <strong>Minimum mapping unit: 1.0ha.</strong> Real burned-area practice commonly runs
+            1-6+ hectares as a noise floor - filtering out small, isolated patches too tiny to be a
+            confident real burn signal rather than sensor noise.
           </li>
           <li>
             <strong>Two thresholds, not one, with the adaptive value leading.</strong> A single fixed
@@ -481,8 +453,7 @@ export function Reference() {
           </li>
           <li>
             Exposure figures are recomputed only when a fire is new, its perimeter changes
-            materially, or on a periodic staleness check (currently 24 hours) - not on every page
-            load, and not instantly when a data source (like the Census key) changes.
+            materially, or on a periodic staleness check - not on every page load.
           </li>
           <li>
             Some NIFC fields (discovery date, containment %, cause, complexity) are missing for a
@@ -499,10 +470,9 @@ export function Reference() {
           </li>
           <li>
             SAR RTC processing takes roughly 25-30 minutes per scene, dominated by the terrain-
-            flattening step (~23 minutes of it, measured directly - down from ~46 minutes before
-            increasing the compute job's vCPU allocation). Further speedups (parallelizing multiple
-            scenes at once, Spot-backed compute) are identified but not built - a demo processing a
-            handful of fires isn't a production-throughput problem.
+            flattening step. Further speedups (parallelizing multiple scenes, Spot-backed compute)
+            are identified but not built - a demo processing a handful of fires isn't a
+            production-throughput problem.
           </li>
         </ul>
       </section>

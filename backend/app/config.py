@@ -18,7 +18,13 @@ class Settings(BaseSettings):
     database_public_url: str | None = None
 
     nifc_ingestion_interval_minutes: int = 15
-    exposure_staleness_hours: int = 24
+    # Temporarily lowered from 24 to 3 (2026-08-02) to backfill population
+    # data faster after a sustained Census API failure window left ~half
+    # of tracked fires with population_est null on their last recompute -
+    # a fire only gets retried at all once its own staleness cutoff passes,
+    # so 24h meant a bad fire could sit null for a full day. Revert to 24
+    # once the table's population columns are solidly repopulated again.
+    exposure_staleness_hours: int = 3
     recompute_api_key: str | None = None
     census_api_key: str | None = None
     # Gates frontend-facing admin actions (mark-for-acquisition, confirm &

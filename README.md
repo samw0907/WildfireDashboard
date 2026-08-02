@@ -142,7 +142,7 @@ condensed version of what's actually non-obvious about it:
 
 - **Fire perimeters** — [NIFC WFIGS Current Interagency Fire Perimeters](https://data-nifc.opendata.arcgis.com/datasets/nifc::wfigs-current-interagency-fire-perimeters), refreshed ~every 15 minutes. US only.
 - **Building footprints** — OpenStreetMap via the Overpass API.
-- **Population estimates** — US Census Bureau: [TIGERweb](https://tigerweb.geo.census.gov/) block group boundaries + [ACS 5-Year](https://www.census.gov/data/developers/data-sets/acs-5year.html) population, redistributed across each block group's real mapped buildings (dasymetric weighting), not spread evenly by land area.
+- **Population estimates** — US Census Bureau: [TIGERweb](https://tigerweb.geo.census.gov/) block group boundaries + [ACS 5-Year](https://www.census.gov/data/developers/data-sets/acs-5year.html) population, redistributed across each block group's real mapped buildings (dasymetric weighting), not spread evenly by land area. Shown for reference only — not used in the priority score, since it depends on a second external API with real reliability gaps building counts alone don't share.
 - **Fire-weather alerts + forecast** — [NWS API](https://www.weather.gov/documentation/services-web-api), free, no key required.
 - **SAR scenes** — [Copernicus Data Space Ecosystem](https://dataspace.copernicus.eu/), Sentinel-1 IW GRD, searched live.
 

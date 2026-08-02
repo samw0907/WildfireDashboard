@@ -7,7 +7,13 @@ See DECISIONS.md for the full reasoning - short version, four components:
     it. Population dropped as a separate component entirely, not just
     reweighted: population is itself now building-weighted (dasymetric
     redistribution, see exposure.py), so scoring both double-counted the
-    same underlying signal rather than adding an independent one.
+    same underlying signal rather than adding an independent one. Also,
+    population depends on a second external API (Census) with real
+    reliability gaps building counts alone don't share - confirmed live
+    2026-08-02, a multi-hour Census failure window left roughly half of
+    tracked fires with population_est null while building_count succeeded
+    in the same cycle (see exposure.py) - one more reason it's the less
+    trustworthy of the two signals to score on.
     Building's own weight doubled to fill that gap, per a direct real-data
     finding: a fire with ~700 buildings within 2.4km (Bench) was scoring
     *below* one with 14 (Little Giant) almost entirely because a single
