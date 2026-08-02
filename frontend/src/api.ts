@@ -38,6 +38,17 @@ export interface FireDetail extends Fire {
   buffers: Record<string, GeoJSON.Geometry>
 }
 
+export interface FireNote {
+  id: number
+  text: string
+  // Reserved for a future "pin this note to a map point" feature - not
+  // set by anything in the UI yet.
+  lat: number | null
+  lon: number | null
+  created_at: string
+  updated_at: string | null
+}
+
 export interface IngestionStatus {
   status: 'live' | 'reconnecting' | 'disconnected'
   last_successful_at: string | null
@@ -309,6 +320,32 @@ export function unmarkAcquisition(fireId: string, sequence: number): Promise<unk
 // No undo - callers should confirm with the user before calling this.
 export function deleteAcquisition(fireId: string, sequence: number): Promise<unknown> {
   return authenticatedRequest(`/api/fires/${fireId}/acquisitions/${sequence}`, { method: 'DELETE' })
+}
+
+// Public read - notes are part of the demo, not a private admin tool
+// (see auth.py/fires.py) - only create/edit/delete need the admin key.
+export function listFireNotes(fireId: string): Promise<FireNote[]> {
+  return get<FireNote[]>(`/api/fires/${fireId}/notes`)
+}
+
+export function createFireNote(fireId: string, text: string): Promise<FireNote> {
+  return authenticatedRequest(`/api/fires/${fireId}/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+}
+
+export function updateFireNote(fireId: string, noteId: number, text: string): Promise<FireNote> {
+  return authenticatedRequest(`/api/fires/${fireId}/notes/${noteId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+}
+
+export function deleteFireNote(fireId: string, noteId: number): Promise<unknown> {
+  return authenticatedRequest(`/api/fires/${fireId}/notes/${noteId}`, { method: 'DELETE' })
 }
 
 export function exposureAtBand(exposure: ExposureStat[], bufferMeters: number): ExposureStat | undefined {

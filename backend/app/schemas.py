@@ -42,6 +42,23 @@ class FireDetailOut(FireOut):
     buffers: dict[str, dict]
 
 
+class FireNoteOut(BaseModel):
+    id: int
+    text: str
+    lat: float | None
+    lon: float | None
+    created_at: datetime
+    updated_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class FireNoteIn(BaseModel):
+    text: str
+    lat: float | None = None
+    lon: float | None = None
+
+
 class WindOut(BaseModel):
     speed_mph: float | None
     direction_degrees: float | None

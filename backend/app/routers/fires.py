@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from shapely.geometry import mapping, shape
@@ -5,13 +7,23 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .. import geo, overpass, weather
+from ..auth import require_admin_key
 from ..config import get_settings
 from ..db import SessionLocal
 from ..exposure import BUFFER_BANDS, compute_exposure_for_fire
-from ..models import Acquisition, BuildingCache, ExposureStat, Fire
+from ..models import Acquisition, BuildingCache, ExposureStat, Fire, FireNote
 from ..nws import fires_in_active_warnings, get_cached_alerts
 from ..priority import compute_priority_scores
-from ..schemas import ExposureStatOut, FireDetailOut, FireOut, FireWeatherOut, ForecastPeriodOut, WindOut
+from ..schemas import (
+    ExposureStatOut,
+    FireDetailOut,
+    FireNoteIn,
+    FireNoteOut,
+    FireOut,
+    FireWeatherOut,
+    ForecastPeriodOut,
+    WindOut,
+)
 
 # Daytime-only periods to return - 5 days including today, no overnight
 # rows (kept the Fire Detail forecast panel compact per user feedback).
@@ -192,3 +204,69 @@ def trigger_recompute(fire_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail=f"Exposure recompute failed (upstream error): {exc}") from exc
 
     return {"status": "recomputed", "fire_id": fire_id}
+
+
+@router.get("/fires/{fire_id}/notes", response_model=list[FireNoteOut])
+def list_fire_notes(fire_id: str, db: Session = Depends(get_db)):
+    # Read is public (same "publicly readable, admin-gated to write" split
+    # as everything else on this site) - analyst commentary is part of the
+    # demo, not a private admin tool.
+    if db.get(Fire, fire_id) is None:
+        raise HTTPException(status_code=404, detail="Fire not found")
+    notes = db.scalars(
+        select(FireNote).where(FireNote.fire_id == fire_id).order_by(FireNote.created_at.desc())
+    ).all()
+    return [FireNoteOut.model_validate(n) for n in notes]
+
+
+@router.post(
+    "/fires/{fire_id}/notes",
+    response_model=FireNoteOut,
+    status_code=201,
+    dependencies=[Depends(require_admin_key)],
+)
+def create_fire_note(fire_id: str, body: FireNoteIn, db: Session = Depends(get_db)):
+    if db.get(Fire, fire_id) is None:
+        raise HTTPException(status_code=404, detail="Fire not found")
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="Note text can't be empty")
+
+    note = FireNote(fire_id=fire_id, text=body.text.strip(), lat=body.lat, lon=body.lon)
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return FireNoteOut.model_validate(note)
+
+
+@router.patch(
+    "/fires/{fire_id}/notes/{note_id}",
+    response_model=FireNoteOut,
+    dependencies=[Depends(require_admin_key)],
+)
+def update_fire_note(fire_id: str, note_id: int, body: FireNoteIn, db: Session = Depends(get_db)):
+    note = db.get(FireNote, note_id)
+    if note is None or note.fire_id != fire_id:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if not body.text.strip():
+        raise HTTPException(status_code=400, detail="Note text can't be empty")
+
+    note.text = body.text.strip()
+    note.lat = body.lat
+    note.lon = body.lon
+    note.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(note)
+    return FireNoteOut.model_validate(note)
+
+
+@router.delete("/fires/{fire_id}/notes/{note_id}", dependencies=[Depends(require_admin_key)])
+def delete_fire_note(fire_id: str, note_id: int, db: Session = Depends(get_db)):
+    note = db.get(FireNote, note_id)
+    if note is None or note.fire_id != fire_id:
+        raise HTTPException(status_code=404, detail="Note not found")
+    db.delete(note)
+    db.commit()
+    # 200 + a small body, not 204 - the frontend's shared authenticatedRequest
+    # helper always calls response.json(), which throws on an empty body
+    # (same convention already used by delete_acquisition).
+    return {"status": "deleted", "note_id": note_id}

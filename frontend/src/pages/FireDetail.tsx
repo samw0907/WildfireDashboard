@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { getFire, getFireWeather, type FireDetail as FireDetailData, type FireWeather, type Scene } from '../api'
 import { FireMap } from '../components/FireMap'
 import { AcquisitionPanel } from '../components/AcquisitionPanel'
+import { FireNotes } from '../components/FireNotes'
 import { PageLoading } from '../components/PageLoading'
 import { InfoHint } from '../components/InfoHint'
 import { RfwBadge } from '../components/RfwBadge'
@@ -306,6 +307,11 @@ export function FireDetail() {
         onResultsChange={setAcquisitionResults}
         onConfirmedChange={setAcquisitionConfirmed}
       />
+
+      {/* Always last on the page, independent of acquisition state - notes
+          are available whether or not this fire's ever been marked for
+          acquisition. */}
+      <FireNotes fireId={fire.id} />
     </div>
   )
 }

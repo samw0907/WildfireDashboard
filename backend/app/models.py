@@ -121,6 +121,31 @@ class ExposureStat(Base):
     population_est: Mapped[float | None] = mapped_column(Numeric)
 
 
+class FireNote(Base):
+    """Free-text analyst commentary on a fire - independent of the
+    acquisition workflow (available whether or not a fire's ever been
+    marked for acquisition), publicly readable, admin-gated to create/
+    edit/delete (same shared-secret pattern as acquisitions - see auth.py).
+    A real timestamped trail, not a single editable field, so a later
+    observation doesn't silently erase an earlier one - e.g. "a dense
+    settlement sits just outside the 2,400m buffer" is exactly the kind of
+    one-off, dated observation this exists for. lat/lon are optional and
+    unused for now - reserved for a future "pin this note to a map point"
+    feature, not built yet."""
+
+    __tablename__ = "fire_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    fire_id: Mapped[str] = mapped_column(ForeignKey("fires.id", ondelete="CASCADE"), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    lat: Mapped[float | None] = mapped_column(Numeric)
+    lon: Mapped[float | None] = mapped_column(Numeric)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class IngestionStatus(Base):
     """One row per NIFC ingestion attempt, used to derive the frontend's
     Live / Reconnecting / No-connection status indicator."""

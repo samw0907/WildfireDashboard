@@ -1942,3 +1942,103 @@
 .honesty-warning-card strong {
   color: var(--text-heading);
 }
+
+/* Fire notes - always last on the page, independent of acquisition state */
+
+.fire-notes-panel {
+  margin-top: 16px;
+}
+
+.fire-notes-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.fire-notes-add textarea,
+.fire-note-edit-actions textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.fire-notes-add button {
+  align-self: flex-start;
+}
+
+.fire-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+}
+
+.fire-note {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+}
+
+.fire-note-text {
+  font-size: 13px;
+  color: var(--text);
+  white-space: pre-wrap;
+  margin-bottom: 8px;
+}
+
+.fire-note-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fire-note-timestamp {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.fire-note-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fire-note-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+}
+
+.fire-note-action-btn:hover {
+  color: var(--text);
+}
+
+.fire-note-action-btn--danger:hover {
+  color: var(--accent-red);
+}
+
+.fire-note-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.fire-note-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
