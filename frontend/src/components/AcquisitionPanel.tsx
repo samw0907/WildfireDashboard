@@ -645,6 +645,17 @@ export function AcquisitionPanel({
               .map((s) => `${sceneLabel(s)} (${s.aoi_coverage_percent ?? '?'}% coverage)`)
               .join(' · ')}
           </p>
+          {activeAcquisition.status === 'complete' &&
+            [...activeAcquisition.before_scenes, ...activeAcquisition.after_scenes].some(
+              (s) => s.aoi_coverage_percent == null || s.aoi_coverage_percent < FULL_COVERAGE_THRESHOLD,
+            ) && (
+              <p className="acquisition-warning">
+                One or more selected scenes cover less than {FULL_COVERAGE_THRESHOLD}% of this fire - the
+                SAR-detected burn area below may end abruptly along a straight edge where the scene's own
+                coverage runs out, not because the fire itself stopped there. A real limitation of the source
+                imagery for this acquisition, not a processing error.
+              </p>
+            )}
           {activeAcquisition.status === 'marked' && (
             <button
               className="acquisition-confirm-btn"
