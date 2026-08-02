@@ -712,7 +712,7 @@ export function FireMap({
               {hasBurnPerimeterToggle && (
                 <label
                   className="map-layers-option"
-                  title="SAR-detected change area from this fire's completed acquisition - a separate, independent measurement from the reported perimeter above, not always the same shape or extent."
+                  title="SAR-detected change area from this fire's acquisition - independent from the reported perimeter, not always the same shape."
                 >
                   <input
                     type="checkbox"
@@ -725,7 +725,7 @@ export function FireMap({
               {hasAlertsToggle && (
                 <label
                   className="map-layers-option"
-                  title="Issued by local NWS offices when wind, humidity, and dryness combine to create critical fire weather - not tied to fire counts or size, so coverage can be a tight regional cluster on one day and nationwide the next."
+                  title="NWS Red Flag Warning/Fire Weather Watch zones - not tied to fire locations, so coverage varies day to day."
                 >
                   <input
                     type="checkbox"
@@ -751,7 +751,7 @@ export function FireMap({
               {hasSceneFootprintsToggle && (
                 <label
                   className="map-layers-option"
-                  title="Real Sentinel-1 scene footprints used for this acquisition. Hidden by default once scenes are confirmed, since they matter most during scene selection - toggle back on any time to see coverage again."
+                  title="Sentinel-1 scene footprints used for this acquisition - hidden by default once scenes are confirmed."
                 >
                   <input
                     type="checkbox"

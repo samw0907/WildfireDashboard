@@ -2,13 +2,13 @@
 // doesn't drift between the table, fire detail page, and dashboard.
 
 export const PRIORITY_SCORE_HELP =
-  'A 0-100 relative ranking for today\'s fire list: up to 40 points from building exposure (closer bands count more, log-transformed so one dense outlier fire doesn\'t drown out the rest), up to 40 from fire scale (log-transformed acreage), up to 20 from containment (less contained scores higher), plus +5 if the fire is in an active Red Flag Warning zone. Normalized against the current fire list, not a fixed scale - see Reference for the full formula.'
+  "A weighted score combining building exposure, fire scale, containment, and fire-weather warnings - relative to today's fires, not an absolute rating. See Reference for the formula."
 
 export const POPULATION_HELP =
   'Census population, weighted by mapped buildings within the buffer - an estimate, less accurate for small fires in sparse rural areas. See Reference for methodology.'
 
 export const COMPLEXITY_HELP =
-  'NIMS incident complexity typing - counterintuitively, Type 1 is the largest/most complex (national resources, can run for months) and Type 5 is the smallest (5 or fewer people needed). See Reference for the full scale.'
+  'NIMS incident complexity typing - Type 1 is the largest/most complex, Type 5 the smallest (counterintuitively numbered). See Reference for the full scale.'
 
 export const BUILDINGS_HELP =
   'OpenStreetMap building footprints within 2.4km of the fire perimeter - real counts, but OSM mapping completeness varies by region, especially in rural areas.'

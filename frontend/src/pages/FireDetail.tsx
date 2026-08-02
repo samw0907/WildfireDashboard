@@ -149,7 +149,7 @@ export function FireDetail() {
           {weather?.wind.direction_degrees != null && (
             <div
               className="wind-indicator"
-              title={`Wind from ${weather.wind.direction_text} at ${weather.wind.speed_mph} mph. Arrow points in the direction the wind is blowing toward - the likely fire-spread direction.`}
+              title={`Wind from ${weather.wind.direction_text} at ${weather.wind.speed_mph} mph. Arrow points the way it's blowing - the likely fire-spread direction.`}
             >
               <svg
                 className="wind-indicator-arrow"
