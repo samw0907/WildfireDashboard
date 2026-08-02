@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { TooltipBubble } from './TooltipBubble'
 
 const RFW_TOOLTIP_TEXT =
-  "NWS Red Flag Warning / Fire Weather Watch: the National Weather Service's own designation that current wind, humidity, and dryness favor rapid fire spread - not a prediction about this specific fire, just that conditions in its area currently support one."
+  'NWS designation that current wind, humidity, and dryness favor rapid fire spread - not specific to this fire\'s own behavior.'
 
 // Hover-triggered (not click, unlike InfoHint) - deliberately kept as
 // hover since this is a passive status flag, not something someone needs

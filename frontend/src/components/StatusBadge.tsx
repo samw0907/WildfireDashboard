@@ -39,12 +39,12 @@ export function StatusBadge() {
   }, [])
 
   const lastUpdateText = state.last_successful_at
-    ? `Last successful update ${new Date(state.last_successful_at).toLocaleString()}.`
+    ? `Last update ${new Date(state.last_successful_at).toLocaleString()}.`
     : 'No successful update yet.'
   // Same hover-triggered TooltipBubble pattern as RfwBadge/AcquisitionBadge
   // (not a native title= tooltip) - kept consistent so every small data-
   // provenance hint on the site looks and behaves the same way.
-  const tooltipText = `Data source: NIFC's WFIGS wildland fire feed, polled roughly every 15 minutes. ${lastUpdateText}`
+  const tooltipText = `NIFC's WFIGS feed, polled every 15 minutes. ${lastUpdateText}`
 
   return (
     <div
