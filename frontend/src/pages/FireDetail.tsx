@@ -221,19 +221,21 @@ export function FireDetail() {
                 const iconColor = forecastIconColor(p.short_forecast ?? '')
                 return (
                   <div key={p.start_time} className="forecast-row" title={p.short_forecast ?? undefined}>
-                    <span className="forecast-row-icon" style={{ color: iconColor }}>
-                      <Icon />
-                    </span>
-                    <span className="forecast-row-name">{p.name}</span>
-                    {p.temperature != null && (
-                      <span className="forecast-row-temp">
-                        {p.temperature}&deg;{p.temperature_unit}
+                    <div className="forecast-row-name">{p.name}</div>
+                    <div className="forecast-row-body">
+                      <span className="forecast-row-icon" style={{ color: iconColor }}>
+                        <Icon />
                       </span>
-                    )}
-                    <span className="forecast-row-details">
-                      {p.wind_speed && `${p.wind_direction} ${p.wind_speed}`}
-                      {!!p.probability_of_precipitation && ` · ${p.probability_of_precipitation}% rain`}
-                    </span>
+                      {p.temperature != null && (
+                        <span className="forecast-row-temp">
+                          {p.temperature}&deg;{p.temperature_unit}
+                        </span>
+                      )}
+                      <span className="forecast-row-details">
+                        {p.wind_speed && `${p.wind_direction} ${p.wind_speed}`}
+                        {!!p.probability_of_precipitation && ` · ${p.probability_of_precipitation}% rain`}
+                      </span>
+                    </div>
                   </div>
                 )
               })}

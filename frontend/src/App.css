@@ -1584,20 +1584,33 @@
   min-height: 0;
 }
 
-/* Single compact row per period, not a card - this is secondary context
-   (capped to 6 periods in FireDetail.tsx), so it should read as a quick
-   scan, not compete visually with the map/exposure stats above and below
-   it. Sized to comfortably fit 6 rows within the column's height without
-   scrolling or bleeding into whatever's next on the page. */
+/* Two lines per period (name, then icon/temp/details), not one - a
+   single line forced the day name to compete for width with icon/temp/
+   wind/rain inside a 220-280px column and got ellipsis-truncated to
+   almost nothing. Giving the name its own full-width line first fixes
+   that; kept noticeably more compact than the original card style
+   (smaller padding/fonts) so 6 of these still comfortably fit within the
+   column's height without a scrollbar. */
 .forecast-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 12px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-elevated);
+}
+
+.forecast-row-name {
   font-size: 13px;
+  font-weight: 700;
+}
+
+.forecast-row-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .forecast-row-icon {
@@ -1606,30 +1619,24 @@
 }
 
 .forecast-row-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.forecast-row-name {
-  font-weight: 700;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  width: 18px;
+  height: 18px;
 }
 
 .forecast-row-temp {
+  font-size: 15px;
   font-weight: 700;
   color: var(--text);
   flex-shrink: 0;
 }
 
 .forecast-row-details {
-  flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-muted);
   font-size: 12px;
-  white-space: nowrap;
 }
 
 .exposure-panel {
@@ -1641,15 +1648,26 @@
 }
 
 .exposure-bands-row {
-  /* Grid, not flex-wrap: with 4 cards, flex-wrap left a lone 4th card
-     (2400m) alone on its own row, where its own flex-grow then stretched
-     it across the *entire* row width - a flex quirk where each row grows
-     independently. Grid's repeat(auto-fit, minmax(...)) establishes one
-     shared column count for the whole container, so a short last row just
-     leaves the remaining column tracks empty instead of stretching. */
+  /* Fixed column counts, not auto-fit/flex-wrap - auto-fit stopped the
+     4th card from stretching full-width, but still left it alone on its
+     own row with empty space next to it whenever only 3 columns fit.
+     Explicit counts guarantee it's always either a clean 4-across or a
+     clean 2x2, never a 3-then-1 leftover. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .exposure-bands-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .exposure-bands-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .exposure-band-card {
