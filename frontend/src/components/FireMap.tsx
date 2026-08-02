@@ -538,7 +538,23 @@ export function FireMap({
       }
     }
 
-    if (map.isStyleLoaded()) {
+    // Guarded on whether our own source already exists, not
+    // map.isStyleLoaded() - that flag reflects the *whole* style/tile-
+    // loading state and can transiently report false on a later re-run of
+    // this effect (e.g. while unrelated tiles are still fetching) even
+    // though the map's one-time 'load' event already fired long ago. That
+    // falls into the `else` branch and registers `map.once('load', ...)` -
+    // but 'load' only ever fires once per map instance, so a listener
+    // registered after the fact never runs, silently dropping that
+    // specific update forever. This is the confirmed real cause of the
+    // SAR burn perimeter/building-damage layers staying permanently empty
+    // even once real data arrived (toggling visibility did nothing because
+    // there was genuinely no data in the source, not a stacking-order
+    // problem). Sources persist for the map's whole lifetime once created
+    // in the map.on('load', ...) callback above, so checking for one
+    // directly is both correct and stable - same fix already applied to
+    // the toggle-visibility effects below, now applied here too.
+    if (map.getSource(SOURCE_ID)) {
       updateData()
     } else {
       map.once('load', updateData)

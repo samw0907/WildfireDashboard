@@ -1579,73 +1579,56 @@
 .forecast-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-height: 0;
-  /* Safety net, not the primary fix - NWS can return more periods than
-     fit in this column's height (55vh, shared with the map). Without
-     this, overflowing periods rendered past the box's bottom edge with
-     nothing clipping them, so they visually bled into (and looked like
-     they were "tucked behind") the Exposure section below rather than
-     being cut off cleanly. A contained scrollbar is a much smaller UX
-     cost than that. */
-  overflow-y: auto;
 }
 
-.forecast-list-item {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-elevated);
-}
-
-.forecast-list-name {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.forecast-list-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.forecast-list-main {
+/* Single compact row per period, not a card - this is secondary context
+   (capped to 6 periods in FireDetail.tsx), so it should read as a quick
+   scan, not compete visually with the map/exposure stats above and below
+   it. Sized to comfortably fit 6 rows within the column's height without
+   scrolling or bleeding into whatever's next on the page. */
+.forecast-row {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  font-size: 13px;
 }
 
-.forecast-list-icon {
+.forecast-row-icon {
   display: flex;
+  flex-shrink: 0;
 }
 
-.forecast-list-icon svg {
-  width: 26px;
-  height: 26px;
+.forecast-row-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
-.forecast-list-temp {
-  font-size: 19px;
+.forecast-row-name {
+  font-weight: 700;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.forecast-row-temp {
   font-weight: 700;
   color: var(--text);
+  flex-shrink: 0;
 }
 
-.forecast-list-details {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-  font-size: 13px;
-  font-weight: 600;
+.forecast-row-details {
+  flex-shrink: 0;
   color: var(--text-muted);
-  text-align: right;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1749,8 +1732,8 @@
     flex-direction: row;
     flex-wrap: wrap;
   }
-  .forecast-list-item {
-    flex: 1 1 160px;
+  .forecast-row {
+    flex: 1 1 220px;
   }
 }
 

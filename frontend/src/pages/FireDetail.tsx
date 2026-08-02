@@ -211,32 +211,29 @@ export function FireDetail() {
           <div className="forecast-column">
             <h3>Forecast</h3>
             <div className="forecast-list">
-              {weather.periods.map((p) => {
+              {/* Capped at 6 (~3 days) rather than every period NWS returns
+                  (up to 14) - this is secondary context, not the primary
+                  thing on this page, so a compact single-line-per-period
+                  layout that reliably fits without a scrollbar matters more
+                  here than showing the full 7-day outlook. */}
+              {weather.periods.slice(0, 6).map((p) => {
                 const Icon = forecastIcon(p.short_forecast ?? '')
                 const iconColor = forecastIconColor(p.short_forecast ?? '')
                 return (
-                  <div key={p.start_time} className="forecast-list-item" title={p.short_forecast ?? undefined}>
-                    <div className="forecast-list-name">{p.name}</div>
-                    <div className="forecast-list-body">
-                      <div className="forecast-list-main">
-                        <span className="forecast-list-icon" style={{ color: iconColor }}>
-                          <Icon />
-                        </span>
-                        {p.temperature != null && (
-                          <span className="forecast-list-temp">
-                            {p.temperature}&deg;{p.temperature_unit}
-                          </span>
-                        )}
-                      </div>
-                      <div className="forecast-list-details">
-                        {p.wind_speed && (
-                          <span>
-                            {p.wind_direction} {p.wind_speed}
-                          </span>
-                        )}
-                        {!!p.probability_of_precipitation && <span>{p.probability_of_precipitation}% rain</span>}
-                      </div>
-                    </div>
+                  <div key={p.start_time} className="forecast-row" title={p.short_forecast ?? undefined}>
+                    <span className="forecast-row-icon" style={{ color: iconColor }}>
+                      <Icon />
+                    </span>
+                    <span className="forecast-row-name">{p.name}</span>
+                    {p.temperature != null && (
+                      <span className="forecast-row-temp">
+                        {p.temperature}&deg;{p.temperature_unit}
+                      </span>
+                    )}
+                    <span className="forecast-row-details">
+                      {p.wind_speed && `${p.wind_direction} ${p.wind_speed}`}
+                      {!!p.probability_of_precipitation && ` · ${p.probability_of_precipitation}% rain`}
+                    </span>
                   </div>
                 )
               })}
