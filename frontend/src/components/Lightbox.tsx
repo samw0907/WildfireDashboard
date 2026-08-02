@@ -23,11 +23,6 @@ export function Lightbox({ src, alt, onClose }: LightboxProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  function reset() {
-    setScale(1)
-    setPos({ x: 0, y: 0 })
-  }
-
   function onWheel(e: React.WheelEvent) {
     e.preventDefault()
     setScale((s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s - e.deltaY * 0.001 * s)))
@@ -54,9 +49,6 @@ export function Lightbox({ src, alt, onClose }: LightboxProps) {
         </button>
         <button onClick={() => setScale((s) => Math.max(MIN_SCALE, s - 0.4))} title="Zoom out">
           −
-        </button>
-        <button onClick={reset} title="Reset zoom/pan">
-          Reset
         </button>
         <button onClick={onClose} title="Close (Esc)">
           ✕

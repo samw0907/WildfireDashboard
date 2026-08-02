@@ -336,10 +336,41 @@ export function FireMap({
         paint: { 'line-color': BUILDINGS_COLOR, 'line-width': 1 },
       })
 
-      // SAR compute results - added above the buffer bands/generic
-      // buildings but below the fire perimeter itself, so a detected burn
-      // area/damaged buildings read as more prominent than the generic
-      // exposure rings and building layer underneath.
+      // promoteId lets feature-state key off our own string fire id
+      // (MapLibre feature-state needs a numeric or string feature id, and
+      // GeoJSON features here don't have a top-level `id` otherwise).
+      map.addSource(SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+        promoteId: 'fireId',
+      })
+      map.addLayer({
+        id: FILL_LAYER_ID,
+        type: 'fill',
+        source: SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: { 'fill-color': FIRE_PERIMETER_FILL_COLOR, 'fill-opacity': 0.35 },
+      })
+      map.addLayer({
+        id: LINE_LAYER_ID,
+        type: 'line',
+        source: SOURCE_ID,
+        layout: { visibility: 'visible' },
+        paint: {
+          'line-color': '#dc2626',
+          'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 3.5, 1.5],
+        },
+      })
+
+      // SAR compute results - added *after* (so rendered on top of) the
+      // reported fire perimeter above. Previously added before it, which
+      // meant the always-on, semi-opaque perimeter fill visually buried
+      // the SAR burn area underneath it wherever they overlapped (nearly
+      // everywhere, since the detected burn area is normally a subset of
+      // the reported perimeter) - toggling the burn layer's visibility
+      // did nothing observable because the actual problem was stacking
+      // order, not visibility. Fixed by reordering, not by touching the
+      // toggle logic itself, which was already correct.
       map.addSource(BURN_PERIMETER_SOURCE_ID, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({
         id: `${BURN_PERIMETER_SOURCE_ID}-fill`,
@@ -386,32 +417,6 @@ export function FireMap({
         paint: {
           'line-color': '#000000',
           'line-width': 1,
-        },
-      })
-
-      // promoteId lets feature-state key off our own string fire id
-      // (MapLibre feature-state needs a numeric or string feature id, and
-      // GeoJSON features here don't have a top-level `id` otherwise).
-      map.addSource(SOURCE_ID, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-        promoteId: 'fireId',
-      })
-      map.addLayer({
-        id: FILL_LAYER_ID,
-        type: 'fill',
-        source: SOURCE_ID,
-        layout: { visibility: 'visible' },
-        paint: { 'fill-color': FIRE_PERIMETER_FILL_COLOR, 'fill-opacity': 0.35 },
-      })
-      map.addLayer({
-        id: LINE_LAYER_ID,
-        type: 'line',
-        source: SOURCE_ID,
-        layout: { visibility: 'visible' },
-        paint: {
-          'line-color': '#dc2626',
-          'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 3.5, 1.5],
         },
       })
 
@@ -619,6 +624,28 @@ export function FireMap({
     }
     wasScenesConfirmedRef.current = !!scenesConfirmed
   }, [scenesConfirmed])
+
+  // One-time default switch: once a real (non-empty) SAR burn perimeter
+  // exists, it's a more specific, more useful answer to "how much of this
+  // fire actually burned" than the officially-reported NIFC perimeter -
+  // so it becomes the default shown, with the reported perimeter hidden
+  // (not removed - still toggleable in the Layers panel, same as scene
+  // footprints above). Guarded the same way: only fires on the false->true
+  // transition, so a user who manually re-enables the reported perimeter
+  // afterward isn't immediately fought by this effect re-running. A
+  // burnPerimeter that's null or empty (not yet complete, or a real "no
+  // burn detected" outcome) deliberately does NOT trigger this - switching
+  // to an empty layer would just show nothing, worse than the reported
+  // perimeter it replaced.
+  const wasSarBurnAvailableRef = useRef(false)
+  useEffect(() => {
+    const hasRealBurnResult = (sarResults?.burnPerimeter?.features.length ?? 0) > 0
+    if (hasRealBurnResult && !wasSarBurnAvailableRef.current) {
+      setFirePerimeterVisible(false)
+      setBurnPerimeterVisible(true)
+    }
+    wasSarBurnAvailableRef.current = hasRealBurnResult
+  }, [sarResults?.burnPerimeter])
 
   const hasAlertsToggle = !!(enableAlerts && alerts && alerts.features.length > 0)
   const hasBuildingsToggle = !!(buildings && buildings.features.length > 0)

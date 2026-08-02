@@ -1579,9 +1579,17 @@
 .forecast-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex: 1;
   min-height: 0;
+  /* Safety net, not the primary fix - NWS can return more periods than
+     fit in this column's height (55vh, shared with the map). Without
+     this, overflowing periods rendered past the box's bottom edge with
+     nothing clipping them, so they visually bled into (and looked like
+     they were "tucked behind") the Exposure section below rather than
+     being cut off cleanly. A contained scrollbar is a much smaller UX
+     cost than that. */
+  overflow-y: auto;
 }
 
 .forecast-list-item {
@@ -1589,8 +1597,8 @@
   flex: 1;
   flex-direction: column;
   justify-content: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-elevated);
@@ -1619,12 +1627,12 @@
 }
 
 .forecast-list-icon svg {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
 }
 
 .forecast-list-temp {
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 700;
   color: var(--text);
 }
@@ -1650,14 +1658,18 @@
 }
 
 .exposure-bands-row {
-  display: flex;
+  /* Grid, not flex-wrap: with 4 cards, flex-wrap left a lone 4th card
+     (2400m) alone on its own row, where its own flex-grow then stretched
+     it across the *entire* row width - a flex quirk where each row grows
+     independently. Grid's repeat(auto-fit, minmax(...)) establishes one
+     shared column count for the whole container, so a short last row just
+     leaves the remaining column tracks empty instead of stretching. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px;
-  flex-wrap: wrap;
 }
 
 .exposure-band-card {
-  flex: 1 1 280px;
-  min-width: 280px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px 20px;
