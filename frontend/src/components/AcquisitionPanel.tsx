@@ -17,6 +17,12 @@ import {
   type Scene,
 } from '../api'
 import { StatCard } from './StatCard'
+import {
+  DAMAGE_DESTROYED_HELP,
+  DAMAGE_POSSIBLY_AFFECTED_HELP,
+  DAMAGE_NO_DAMAGE_HELP,
+  DAMAGE_THRESHOLD_SENSITIVE_HELP,
+} from '../helpText'
 import { BuildingIcon, TrashIcon } from './icons'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Lightbox } from './Lightbox'
@@ -724,6 +730,7 @@ export function AcquisitionPanel({
                         unit={damagePercent(destroyed, usableTotal) != null ? ` (${damagePercent(destroyed, usableTotal)}%)` : ''}
                         accent="red"
                         icon={BuildingIcon}
+                        hint={DAMAGE_DESTROYED_HELP}
                       />
                       <StatCard
                         label="Possibly affected"
@@ -735,6 +742,7 @@ export function AcquisitionPanel({
                         }
                         accent="orange"
                         icon={BuildingIcon}
+                        hint={DAMAGE_POSSIBLY_AFFECTED_HELP}
                       />
                       <StatCard
                         label="No damage detected"
@@ -742,6 +750,7 @@ export function AcquisitionPanel({
                         unit={damagePercent(noDamage, usableTotal) != null ? ` (${damagePercent(noDamage, usableTotal)}%)` : ''}
                         accent="green"
                         icon={BuildingIcon}
+                        hint={DAMAGE_NO_DAMAGE_HELP}
                       />
                       {result.confidence_counts && (
                         <StatCard
@@ -749,6 +758,7 @@ export function AcquisitionPanel({
                           value={result.confidence_counts.uncertain ?? 0}
                           accent="yellow"
                           icon={BuildingIcon}
+                          hint={DAMAGE_THRESHOLD_SENSITIVE_HELP}
                         />
                       )}
                     </div>

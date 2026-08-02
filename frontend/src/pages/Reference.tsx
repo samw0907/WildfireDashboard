@@ -390,6 +390,105 @@ export function Reference() {
           </li>
         </ul>
       </section>
+
+      <section id="references">
+        <h2>References</h2>
+        <p>
+          The SAR methodology above wasn't invented from scratch - it's adapted from the practices
+          and literature below, checked directly rather than assumed. Blog posts and social media
+          aside, everything here is either published research or a documented operational source.
+        </p>
+        <ul>
+          <li>
+            <a href="https://forest-fire.emergency.copernicus.eu/about-effis/technical-background/rapid-damage-assessment" target="_blank" rel="noopener noreferrer">
+              EFFIS — Rapid Damage Assessment
+            </a>{' '}
+            — the EU's own operational wildfire-mapping methodology (optical-primary, human-verified);
+            the basis for framing SAR's real niche as seeing through smoke/cloud, not replacing optical.
+          </li>
+          <li>
+            <a href="https://docs.copernicuslac.terradue.com/services/fire/intro/" target="_blank" rel="noopener noreferrer">
+              Copernicus — Fire (CopernicusLAC Platform)
+            </a>{' '}
+            — background on the EU's broader operational fire-monitoring service context.
+          </li>
+          <li>
+            <a href="https://arxiv.org/pdf/2501.09129" target="_blank" rel="noopener noreferrer">
+              Deep Self-Supervised Disturbance Mapping with the OPERA Sentinel-1 RTC Product
+            </a>{' '}
+            — RTC-based (radiometric terrain-corrected) Sentinel-1 change detection, the same product
+            family this pipeline builds on.
+          </li>
+          <li>
+            <a href="https://www.sciencedirect.com/science/article/pii/S0034425719303645" target="_blank" rel="noopener noreferrer">
+              Burned area detection and mapping using Sentinel-1 backscatter coefficient and thermal
+              anomalies
+            </a>{' '}
+            — core literature behind detecting burned area directly from SAR backscatter change.
+          </li>
+          <li>
+            <a href="https://www.tandfonline.com/doi/full/10.1080/15481603.2021.1907896" target="_blank" rel="noopener noreferrer">
+              A workflow based on Sentinel-1 SAR data and open-source algorithms for unsupervised
+              burned area detection in Mediterranean ecosystems
+            </a>{' '}
+            — a real open-source, ground-truth-free SAR burned-area workflow precedent.
+          </li>
+          <li>
+            <a href="https://rslab.disi.unitn.it/papers/R34-TGARS-change-detection-SAR-kittler.pdf" target="_blank" rel="noopener noreferrer">
+              An Unsupervised Approach Based on the Generalized Kittler-Illingworth Algorithm for SAR
+              Change Detection
+            </a>{' '}
+            — the academic basis for adaptive (ground-truth-free) thresholding of SAR change images,
+            the family of method behind this site's own adaptive threshold.
+          </li>
+          <li>
+            <a href="https://www.sciencedirect.com/science/article/pii/S2212420926000609" target="_blank" rel="noopener noreferrer">
+              Assessing the transferability of post-disaster building damage assessment using SAR and
+              machine learning
+            </a>{' '}
+            — directly on point for this project's central open question: whether a threshold
+            calibrated on one event transfers to another.
+          </li>
+          <li>
+            <a href="https://www.sciencedirect.com/science/article/abs/pii/S2212420925006338" target="_blank" rel="noopener noreferrer">
+              A rapid and quantitative post-wildfire damage assessment of buildings in the 2025
+              Palisades fire based on InSAR
+            </a>{' '}
+            — a very recent, wildfire-specific precedent using InSAR deformation rather than
+            backscatter intensity - a genuinely different signal, noted as a real alternative not
+            currently built here.
+          </li>
+          <li>
+            <a href="https://link.springer.com/article/10.1186/s40623-016-0513-2" target="_blank" rel="noopener noreferrer">
+              Detection of damaged urban areas using interferometric SAR coherence change with
+              PALSAR-2
+            </a>{' '}
+            — the interferometric-coherence alternative family for building-level damage, explicitly
+            out of scope here (needs SLC data and precise co-registration) but grounded in real
+            earthquake-damage literature.
+          </li>
+          <li>
+            <a href="https://essd.copernicus.org/articles/13/5353/2021/" target="_blank" rel="noopener noreferrer">
+              Refined burned-area mapping protocol using Sentinel-2 data
+            </a>{' '}
+            — standard-practice grounding for minimum-mapping-unit (MMU) sizing.
+          </li>
+          <li>
+            <a href="https://www.iceye.com/gov/building-level-wildfire-insights" target="_blank" rel="noopener noreferrer">
+              Building level | Wildfire Insights for government | ICEYE
+            </a>{' '}
+            — ICEYE's real commercial building-level wildfire product; this site's binary
+            destroyed/undamaged-per-building output shape is modeled on the same real-world pattern.
+          </li>
+          <li>
+            <a href="https://www.iceye.com/blog/wildfire-monitoring-with-sar" target="_blank" rel="noopener noreferrer">
+              Revolutionizing Wildfire Monitoring with ICEYE's SAR Technology
+            </a>{' '}
+            — ICEYE's own account of their operational approach and resolution advantages over
+            Sentinel-1.
+          </li>
+        </ul>
+      </section>
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { TooltipBubble } from './TooltipBubble'
 
-const ACQUISITION_TOOLTIP_TEXT = 'One or more SAR acquisitions have been requested for this fire'
+const ACQUISITION_TOOLTIP_TEXT =
+  'This fire has a Sentinel-1 SAR damage-assessment run associated with it (in progress or complete) - open the fire for burn-area/building-damage results.'
 
 // Hover-triggered, same pattern as RfwBadge - a passive status flag, not
 // something worth a deliberate click-to-open on touch.

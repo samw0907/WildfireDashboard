@@ -6,7 +6,7 @@ import { AcquisitionPanel } from '../components/AcquisitionPanel'
 import { PageLoading } from '../components/PageLoading'
 import { InfoHint } from '../components/InfoHint'
 import { RfwBadge } from '../components/RfwBadge'
-import { COMPLEXITY_HELP } from '../helpText'
+import { COMPLEXITY_HELP, SOURCE_HELP, EXPOSURE_BANDS_HELP, FORECAST_HELP } from '../helpText'
 import {
   BuildingIcon,
   PeopleIcon,
@@ -107,7 +107,8 @@ export function FireDetail() {
       <h1>{fire.name}</h1>
       <p className="page-subtitle">
         {fire.acres ? `${Math.round(fire.acres).toLocaleString()} acres` : 'Acreage unknown'} · Source:{' '}
-        {fire.source} · Last updated {new Date(fire.source_updated).toLocaleString()}
+        {fire.source}
+        <InfoHint text={SOURCE_HELP} /> · Last updated {new Date(fire.source_updated).toLocaleString()}
       </p>
 
       <div className="incident-badges">
@@ -209,7 +210,10 @@ export function FireDetail() {
         </div>
         {weather && weather.periods.length > 0 && (
           <div className="forecast-column">
-            <h3>Forecast</h3>
+            <h3>
+              Forecast
+              <InfoHint text={FORECAST_HELP} />
+            </h3>
             <div className="forecast-list">
               {/* Capped at 6 (~3 days) rather than every period NWS returns
                   (up to 14) - this is secondary context, not the primary
@@ -245,7 +249,10 @@ export function FireDetail() {
       </div>
 
       <div className="exposure-panel">
-        <h2>Exposure</h2>
+        <h2>
+          Exposure
+          <InfoHint text={EXPOSURE_BANDS_HELP} />
+        </h2>
         <p className="exposure-note">
           Population figures are estimates, not precise counts - less accurate for small fires
           in sparse areas. See <Link to="/reference#population-methodology">methodology</Link>.

@@ -3,7 +3,7 @@ import { exposureAtBand, type Fire } from '../api'
 import { AcquisitionBadge } from './AcquisitionBadge'
 import { InfoHint } from './InfoHint'
 import { RfwBadge } from './RfwBadge'
-import { PRIORITY_SCORE_HELP, POPULATION_HELP } from '../helpText'
+import { PRIORITY_SCORE_HELP, POPULATION_HELP, BUILDINGS_HELP } from '../helpText'
 
 type SortKey =
   | 'name'
@@ -25,7 +25,7 @@ const COLUMNS: { key: SortKey; label: string; hint?: string }[] = [
   { key: 'discovered_date', label: 'Discovered' },
   { key: 'acres', label: 'Acres' },
   { key: 'percent_contained', label: 'Contained' },
-  { key: 'buildings', label: 'Buildings (2.4km)' },
+  { key: 'buildings', label: 'Buildings (2.4km)', hint: BUILDINGS_HELP },
   { key: 'population', label: 'Population (2.4km)', hint: POPULATION_HELP },
 ]
 

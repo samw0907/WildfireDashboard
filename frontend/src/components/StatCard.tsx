@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { InfoHint } from './InfoHint'
 
 interface StatCardProps {
   label: string
@@ -6,9 +7,10 @@ interface StatCardProps {
   unit?: string
   accent?: 'green' | 'orange' | 'red' | 'yellow'
   icon?: ComponentType
+  hint?: string
 }
 
-export function StatCard({ label, value, unit, accent = 'green', icon: Icon }: StatCardProps) {
+export function StatCard({ label, value, unit, accent = 'green', icon: Icon, hint }: StatCardProps) {
   return (
     <div className="stat-card">
       {Icon && (
@@ -21,7 +23,10 @@ export function StatCard({ label, value, unit, accent = 'green', icon: Icon }: S
           {value}
           {unit && <span className="stat-unit">{unit}</span>}
         </div>
-        <div className="stat-label">{label}</div>
+        <div className="stat-label">
+          {label}
+          {hint && <InfoHint text={hint} />}
+        </div>
       </div>
     </div>
   )
