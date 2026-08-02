@@ -364,6 +364,28 @@ export function Reference() {
         </p>
         <ul>
           <li>
+            <strong>This is a damage assessor for a known fire, not a fire detector.</strong> Fire
+            location and timing come entirely from NIFC - the pipeline never independently confirms
+            that a detected change is actually fire-caused. Run the same threshold logic on an
+            arbitrary patch of this same Sentinel-1 scene with no fire anywhere nearby (a mountain
+            range mid-snowmelt, for instance) and it would very plausibly come back looking just as
+            "damaged" - nothing in the backscatter signal itself distinguishes fire from snowmelt,
+            vegetation growth, or any other land-cover change. This isn't a shortcut unique to this
+            project: real operational systems mostly work the same way, since "is a fire happening,
+            right now, here" is usually solved by an entirely different sensor family - thermal-
+            anomaly detection (e.g. MODIS/VIIRS active-fire hotspots), which directly senses heat and
+            genuinely can't be confused with snowmelt. NIFC's own incident data sits downstream of
+            exactly that kind of detection. SAR/optical change detection is then dispatched{' '}
+            <em>to an already-identified location</em> to assess extent and damage, not to discover
+            fires blindly. Where this could genuinely be strengthened without abandoning the
+            approach: a single before/after pair can't distinguish fire's own temporal signature (an
+            abrupt drop, then a slow, partial <em>recovery</em> over following weeks as vegetation
+            regrows) from a smoother, often-reversible seasonal shift like snowmelt - a real
+            multi-date time series, not just two snapshots, is what the wider literature uses to
+            tell these apart, alongside fusing in independent thermal-anomaly data directly rather
+            than relying solely on an already-known perimeter.
+          </li>
+          <li>
             <strong>Sentinel-1, not ICEYE's own commercial constellation.</strong> Sentinel-1 is
             free and openly accessible, which is what makes this project buildable at all - but it's
             a real tradeoff, not a free lunch: Sentinel-1's IW mode resolves ~20m per pixel, vs.
