@@ -29,7 +29,10 @@ const SAR_PIPELINE_STEPS: PipelineStep[] = [
     number: '04',
     eyebrow: 'Detect',
     title: 'Change detection',
-    bullets: ['Log-ratio, VV+VH combined magnitude', 'Fixed threshold → burn mask + building damage'],
+    bullets: [
+      'Log-ratio, VV+VH combined magnitude',
+      'Fixed threshold → burn mask; adaptive + fixed → building damage',
+    ],
     accent: 'yellow',
   },
   {
@@ -236,7 +239,7 @@ export function Reference() {
         <h2>How the priority score works</h2>
         <ParamChips
           params={[
-            { label: 'Exposure weight', value: '40 pts' },
+            { label: 'Building exposure weight', value: '40 pts' },
             { label: 'Fire-scale weight', value: '40 pts' },
             { label: 'Containment weight', value: '20 pts' },
             { label: 'Red Flag bonus', value: '+5 pts' },
@@ -244,14 +247,14 @@ export function Reference() {
           ]}
         />
         <p>
-          Each tracked fire gets a 0-100 score from four components: <strong>exposure</strong> (up
-          to 40 points: 20 building + 20 population, weighted 4/3/2/1 across the perimeter/500m/
-          1,000m/2,400m bands so closer, more-certain exposure counts for more), <strong>fire
-          scale</strong> (up to 40 points, log-transformed acreage, so one outlier-huge fire
-          doesn't dominate the scale), <strong>containment</strong> (up to 20 points, inverted - a
-          0%-contained fire scores the full 20, a fully-contained one scores 0 - an uncontained
-          fire is a bigger ongoing concern than a similarly-sized contained one, since it's still
-          actively threatening damage that hasn't happened yet), and a flat{' '}
+          Each tracked fire gets a 0-100 score from four components: <strong>building
+          exposure</strong> (up to 40 points, log-transformed, weighted 4/3/2/1 across the
+          perimeter/500m/1,000m/2,400m bands so closer, more-certain exposure counts for more),{' '}
+          <strong>fire scale</strong> (up to 40 points, log-transformed acreage, so one
+          outlier-huge fire doesn't dominate the scale), <strong>containment</strong> (up to 20
+          points, inverted - a 0%-contained fire scores the full 20, a fully-contained one scores
+          0 - an uncontained fire is a bigger ongoing concern than a similarly-sized contained one,
+          since it's still actively threatening damage that hasn't happened yet), and a flat{' '}
           <strong>+5 bonus</strong> if the fire currently sits in an active NWS Red Flag Warning /
           Fire Weather Watch zone. Missing containment data defaults to 0% (fully uncontained,
           maximum urgency) rather than a neutral guess or excluding the fire - a real NIFC data gap
@@ -260,22 +263,32 @@ export function Reference() {
           range otherwise).
         </p>
         <p>
-          Exposure was reduced from 25/25 to 20/20 points (2026-08-01) specifically because
-          population is now itself computed from local building density (see{' '}
-          <a href="#population-methodology">above</a>) - the two are no longer as independent a
-          pair of signals as they used to be, so their combined weight was trimmed to reflect that,
-          rather than silently double-counting the same underlying signal at full strength.
+          <strong>Population is not scored separately at all</strong> - a change from an earlier
+          version of this formula (20 building + 20 population points, 40 total). Since population
+          is now itself computed from local building density (dasymetric weighting, see{' '}
+          <a href="#population-methodology">above</a>), scoring both meant double-counting the same
+          underlying signal rather than adding an independent one - so building's own weight was
+          doubled to 40 instead. Building exposure is also log-transformed now, not linear -
+          confirmed necessary on real data: a fire with ~700 buildings nearby was scoring{' '}
+          <em>below</em> one with only 14, because a single unrelated outlier fire elsewhere in the
+          list (13,000+ buildings) dominated the normalization and crushed every other fire's raw
+          building count toward zero. Log-transforming it (the same fix already used for acreage,
+          for the same right-skew reason) fixed the ranking to match what a human reviewer would
+          expect: more buildings at risk is the bigger concern, even at a somewhat smaller or more-
+          contained fire.
+        </p>
+        <p>
           Deliberately <strong>not</strong> scored: NIMS incident complexity type (1-5, still shown
           as its own badge) - it's largely a categorical restatement of fire scale already captured
           via acreage, and folding it in as a second scored input risked the same double-counting
-          problem being corrected in exposure. Also deliberately excluded: raw wind speed or rain
+          problem already corrected above. Also deliberately excluded: raw wind speed or rain
           forecast - wind direction relative to exposure matters more than speed alone (real
           geometry this tool doesn't compute), a forecast is a prediction rather than a current
           condition, and fully modeling fire-weather risk is a genuine research problem on its own,
           not something a simple additive score term can honestly claim to approximate.
         </p>
         <p>
-          Exposure/scale/containment are all normalized or scaled against the{' '}
+          Building exposure/scale/containment are all normalized or scaled against the{' '}
           <em>current</em> fire list, not a fixed scale - this is a same-day relative ranking tool
           for picking today's top candidates, not an absolute or portable risk certification. A
           score of 50 today and a score of 50 next week don't necessarily represent the same
@@ -386,13 +399,13 @@ export function Reference() {
             than relying solely on an already-known perimeter.
           </li>
           <li>
-            <strong>Sentinel-1, not ICEYE's own commercial constellation.</strong> Sentinel-1 is
-            free and openly accessible, which is what makes this project buildable at all - but it's
-            a real tradeoff, not a free lunch: Sentinel-1's IW mode resolves ~20m per pixel, vs.
-            ICEYE's own Strip (3m) or Spot (down to 0.5m) products. A typical house footprint
-            (~100-300m²) spans dozens to hundreds of ICEYE pixels, but is often{' '}
-            <em>smaller than one single Sentinel-1 pixel</em>. That one fact is the root cause behind
-            several other choices below, not an isolated footnote.
+            <strong>Built on Sentinel-1 - free and openly accessible, which is what makes a
+            project like this buildable at all.</strong> Worth being explicit about the real gap
+            between that and what ICEYE's own commercial constellation offers: Sentinel-1's IW mode
+            resolves ~20m per pixel, vs. ICEYE's own Strip (3m) or Spot (down to 0.5m) products. A
+            typical house footprint (~100-300m²) spans dozens to hundreds of ICEYE pixels, but is
+            often <em>smaller than one single Sentinel-1 pixel</em>. That one fact is the root cause
+            behind several other choices below, not an isolated footnote.
           </li>
           <li>
             <strong>No spatial despeckling filter (Lee, Refined Lee, etc.), by design, not by
@@ -485,10 +498,11 @@ export function Reference() {
             confirmed, real compute runs on AWS (see <a href="#sar-methodology">above</a>).
           </li>
           <li>
-            SAR RTC processing currently takes on the order of an hour per scene, dominated by the
-            terrain-flattening step - a few architecture options exist to speed this up (more
-            parallelism, tuned SNAP settings) but weren't worth building for a demo processing a
-            handful of fires rather than a production volume.
+            SAR RTC processing takes roughly 25-30 minutes per scene, dominated by the terrain-
+            flattening step (~23 minutes of it, measured directly - down from ~46 minutes before
+            increasing the compute job's vCPU allocation). Further speedups (parallelizing multiple
+            scenes at once, Spot-backed compute) are identified but not built - a demo processing a
+            handful of fires isn't a production-throughput problem.
           </li>
         </ul>
       </section>

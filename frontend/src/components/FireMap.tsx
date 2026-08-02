@@ -456,7 +456,23 @@ export function FireMap({
       }
     })
 
-    return () => map.remove()
+    // MapLibre (like Mapbox GL) needs its container to have a resolved,
+    // non-zero size at the moment it initializes - if the container's
+    // height hasn't settled yet (plausible on narrower layouts where the
+    // map's height comes from a deeper chain of viewport-relative flex
+    // containers, e.g. Fire Detail on mobile), the map can render blank
+    // and never recover on its own. A ResizeObserver telling it to
+    // re-measure whenever its container's size actually changes is the
+    // standard fix for this - and it's a no-op on an already-correctly-
+    // sized container, so this can't affect any layout that already
+    // works today.
+    const resizeObserver = new ResizeObserver(() => map.resize())
+    resizeObserver.observe(containerRef.current)
+
+    return () => {
+      resizeObserver.disconnect()
+      map.remove()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
