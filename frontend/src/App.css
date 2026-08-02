@@ -1811,6 +1811,28 @@
   margin-bottom: 28px;
 }
 
+.reference-toc {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 28px;
+}
+
+.reference-toc ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  line-height: 1.6;
+}
+
+.reference-toc a {
+  font-size: 14px;
+}
+
 .reference-page ul {
   padding-left: 20px;
   line-height: 1.7;

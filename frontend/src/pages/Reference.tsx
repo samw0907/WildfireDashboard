@@ -57,7 +57,22 @@ export function Reference() {
       <h1>Methodology &amp; References</h1>
       <p className="page-subtitle">Plain-language methodology and data sources</p>
 
-      <section>
+      <nav className="reference-toc" aria-label="Page sections">
+        <ul>
+          <li><a href="#overview">What this tool does</a></li>
+          <li><a href="#data-sources">Data sources</a></li>
+          <li><a href="#population-methodology">Population estimates</a></li>
+          <li><a href="#priority-score">Priority score</a></li>
+          <li><a href="#sar-methodology">SAR acquisition workflow</a></li>
+          <li><a href="#sar-design-choices">Why the SAR pipeline is built this way</a></li>
+          <li><a href="#known-limitations">Known limitations</a></li>
+          <li><a href="#buffer-distances">Buffer distances</a></li>
+          <li><a href="#incident-complexity">Incident complexity levels</a></li>
+          <li><a href="#references">References</a></li>
+        </ul>
+      </nav>
+
+      <section id="overview">
         <h2>What this tool does</h2>
         <p>
           WildfireDashboard tracks currently active US wildfires, estimates the buildings and
@@ -73,7 +88,7 @@ export function Reference() {
         </p>
       </section>
 
-      <section>
+      <section id="data-sources">
         <h2>Data sources</h2>
         <ul>
           <li>
@@ -135,60 +150,6 @@ export function Reference() {
         </ul>
       </section>
 
-      <section>
-        <h2>Buffer distances</h2>
-        <div className="stat-row">
-          <StatCard label="Within perimeter" value="0" unit="m" accent="red" icon={AreaIcon} />
-          <StatCard label="Common ('mode') buffer" value="500" unit="m" icon={AreaIcon} />
-          <StatCard label="Mid-tier buffer" value="1,000" unit="m" icon={AreaIcon} />
-          <StatCard
-            label="CA Fire Alliance firebrand distance"
-            value="2,400"
-            unit="m"
-            accent="orange"
-            icon={AreaIcon}
-          />
-        </div>
-        <p>
-          The 0m band counts exposure inside the fire's own perimeter. 500m/1,000m/2,400m come
-          from a review of wildfire community-asset-protection buffer studies (500m was the most
-          common value across the studies reviewed) and the California Fire Alliance's
-          firebrand-travel-distance standard (2,400m / 1.5 miles). No single global standard
-          exists for this distance - it varies by country and methodology.
-        </p>
-      </section>
-
-      <section>
-        <h2>Incident complexity levels</h2>
-        <p>
-          Fire pages show a "Type" badge (Type 1 through Type 5) sourced directly from NIFC -
-          this is the standard NIMS/ICS incident complexity scale used across US wildland fire
-          agencies, and the numbering is counterintuitive: <strong>lower is bigger</strong>.
-        </p>
-        <ul>
-          <li>
-            <strong>Type 1</strong> - the most complex: a nationally significant incident,
-            national resources committed, can run for weeks or months.
-          </li>
-          <li>
-            <strong>Type 2</strong> - a regionally significant incident, beyond local control,
-            expected to run multiple operational periods.
-          </li>
-          <li>
-            <strong>Type 3</strong> - an extended-attack incident, larger than an initial
-            response but not requiring the full command structure of Type 1/2.
-          </li>
-          <li>
-            <strong>Type 4</strong> - an initial-attack incident, managed with local resources
-            only.
-          </li>
-          <li>
-            <strong>Type 5</strong> - the smallest: typically 5 or fewer people needed to manage
-            it.
-          </li>
-        </ul>
-      </section>
-
       <section id="population-methodology">
         <h2>How population estimates are calculated (and where they're weakest)</h2>
         <p>
@@ -230,7 +191,7 @@ export function Reference() {
         </p>
       </section>
 
-      <section>
+      <section id="priority-score">
         <h2>How the priority score works</h2>
         <ParamChips
           params={[
@@ -461,7 +422,7 @@ export function Reference() {
           </li>
           <li>
             The priority score is a same-day relative ranking, not an absolute or portable risk
-            certification - see <a href="#sar-methodology">above</a> for how it's computed.
+            certification - see <a href="#priority-score">above</a> for how it's computed.
           </li>
           <li>
             SAR acquisition scene picking shows real, live candidates and a real coverage check,
@@ -474,6 +435,45 @@ export function Reference() {
             are identified but not built - a demo processing a handful of fires isn't a
             production-throughput problem.
           </li>
+        </ul>
+      </section>
+
+      <section id="buffer-distances">
+        <h2>Buffer distances</h2>
+        <div className="stat-row">
+          <StatCard label="Within perimeter" value="0" unit="m" accent="red" icon={AreaIcon} />
+          <StatCard label="Common ('mode') buffer" value="500" unit="m" icon={AreaIcon} />
+          <StatCard label="Mid-tier buffer" value="1,000" unit="m" icon={AreaIcon} />
+          <StatCard
+            label="CA Fire Alliance firebrand distance"
+            value="2,400"
+            unit="m"
+            accent="orange"
+            icon={AreaIcon}
+          />
+        </div>
+        <p>
+          The 0m band counts exposure inside the fire's own perimeter. 500m/1,000m/2,400m come
+          from a review of wildfire community-asset-protection buffer studies (500m was the most
+          common value across the studies reviewed) and the California Fire Alliance's
+          firebrand-travel-distance standard (2,400m / 1.5 miles). No single global standard
+          exists for this distance - it varies by country and methodology.
+        </p>
+      </section>
+
+      <section id="incident-complexity">
+        <h2>Incident complexity levels</h2>
+        <p>
+          Fire pages show a "Type" badge (Type 1-5) sourced directly from NIFC - the standard
+          NIMS/ICS incident complexity scale used across US wildland fire agencies. Numbering is
+          counterintuitive: <strong>lower is bigger</strong>.
+        </p>
+        <ul>
+          <li><strong>Type 1</strong> - nationally significant, national resources, weeks-months.</li>
+          <li><strong>Type 2</strong> - regionally significant, beyond local control, multiple operational periods.</li>
+          <li><strong>Type 3</strong> - extended-attack, beyond initial response but short of full Type 1/2 command structure.</li>
+          <li><strong>Type 4</strong> - initial-attack, local resources only.</li>
+          <li><strong>Type 5</strong> - smallest, typically 5 or fewer people needed.</li>
         </ul>
       </section>
 
