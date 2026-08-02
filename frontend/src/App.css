@@ -1402,6 +1402,32 @@
   margin-bottom: 6px;
 }
 
+/* Native <details>/<summary> - deliberately not a custom accordion
+   component, just styled to fit: the methodology caveats are real and
+   available, but collapsed by default so they don't sit between the
+   headline stats and the figures above them. */
+.acquisition-methodology-details {
+  margin: 4px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.acquisition-methodology-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.acquisition-methodology-details[open] summary {
+  margin-bottom: 8px;
+}
+
+.acquisition-methodology-details p:last-child {
+  margin-bottom: 0;
+}
+
 /* Figures shown big, one after another - easier to actually read a burn
    map or backscatter comparison at size than to squint at a thumbnail
    strip and open a lightbox for everything. */

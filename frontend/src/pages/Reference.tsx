@@ -314,6 +314,10 @@ export function Reference() {
         <PipelineDiagram steps={SAR_PIPELINE_STEPS} />
         <ParamChips params={SAR_PARAMS} />
         <p>
+          See <a href="#sar-design-choices">why the pipeline is built this way</a> below for the
+          reasoning behind each of these choices, not just the parameters themselves.
+        </p>
+        <p>
           <strong>Every building is classified against two thresholds, not one.</strong> The
           headline result for each fire uses an <em>adaptive</em> threshold - computed
           automatically from that fire's own change-image statistics (Otsu's method, a standard
@@ -350,6 +354,82 @@ export function Reference() {
             damage assessment.</strong>
           </span>
         </div>
+      </section>
+
+      <section id="sar-design-choices">
+        <h2>Why the SAR pipeline is built this way</h2>
+        <p>
+          The pipeline above is the <em>what</em>. This section is the <em>why</em> - the real
+          tradeoffs behind each non-obvious choice, not just the parameters that resulted from them.
+        </p>
+        <ul>
+          <li>
+            <strong>Sentinel-1, not ICEYE's own commercial constellation.</strong> Sentinel-1 is
+            free and openly accessible, which is what makes this project buildable at all - but it's
+            a real tradeoff, not a free lunch: Sentinel-1's IW mode resolves ~20m per pixel, vs.
+            ICEYE's own Strip (3m) or Spot (down to 0.5m) products. A typical house footprint
+            (~100-300m²) spans dozens to hundreds of ICEYE pixels, but is often{' '}
+            <em>smaller than one single Sentinel-1 pixel</em>. That one fact is the root cause behind
+            several other choices below, not an isolated footnote.
+          </li>
+          <li>
+            <strong>No spatial despeckling filter (Lee, Refined Lee, etc.), by design, not by
+            oversight.</strong> A despeckling filter works by averaging a pixel with its
+            neighborhood - correct for a large, homogeneous target where the true signal doesn't
+            vary much within the filter window (a forest canopy, a grassland), wrong for a target
+            smaller than the filter window itself. Given the resolution gap above, applying a
+            spatial filter to building-level classification risks blending a building's own already-
+            marginal signal into unrelated adjacent ground, which can erase real damage as easily as
+            it removes noise. The safe lever for noise reduction here is temporal, not spatial:
+            multi-date median compositing (Composite mode) and spatial corroboration against
+            MMU-surviving burn patches (both described below) - not a pixel-neighborhood filter.
+          </li>
+          <li>
+            <strong>Median compositing across 3 dates, not 2 and not a mean.</strong> A median can
+            outvote a single anomalous scene (a rain event, a soil-moisture spike) in a way a mean of
+            the same dates can't - but median of only 2 values is mathematically identical to their
+            mean, so 3 is the minimum where that protection actually exists. Single-pair mode (one
+            scene per side) is the deliberate fallback for a fire whose track can't yet support 3,
+            not a silently-degraded version of the same thing - it's always labeled as reduced
+            reliability, never presented with the same confidence.
+          </li>
+          <li>
+            <strong>Minimum mapping unit raised to 1.0ha.</strong> Real burned-area practice
+            commonly runs 1-6+ hectares as a noise floor; a much finer value inherited early in this
+            project's build let far more small noise fragments survive the filter than standard
+            practice would, visible directly as a "checkerboard" burn-area appearance before this was
+            corrected.
+          </li>
+          <li>
+            <strong>Two thresholds, not one, with the adaptive value leading.</strong> A single fixed
+            dB cutoff, once calibrated, has no particular reason to transfer to a fire with different
+            vegetation, terrain, or climate than whatever it was tuned on - confirmed concretely on
+            real data, where the fixed and adaptive thresholds disagreed on roughly half of
+            comparably-classified buildings for one fire. The adaptive (Otsu) threshold, computed
+            fresh from each fire's own change statistics, leads; the fixed value stays as a stable
+            cross-fire reference and the automatic fallback when a fire's own signal has no clean
+            split to adapt to.
+          </li>
+          <li>
+            <strong>Spatial corroboration - the "unconfirmed" class.</strong> A single pixel crossing
+            the threshold isn't by itself proof of real damage - it can just as easily be a noisy
+            pixel with no real signal behind it, especially given the resolution gap above. Any
+            building whose positive reading isn't backed by a real, MMU-surviving burn patch nearby
+            is downgraded to "unconfirmed" rather than asserted as damage - a deliberately separate
+            class from "no damage detected", since an uncorroborated positive reading and a genuine
+            negative reading aren't the same claim.
+          </li>
+          <li>
+            <strong>OpenStreetMap buildings, not Microsoft's Global ML Building Footprints.</strong>{' '}
+            Microsoft's dataset is what the original methodology this project adapted from was
+            validated against, but adopting it would mean two different building inventories on the
+            same page (this tool's own exposure feature already uses OSM) and real new
+            infrastructure for a static, large per-state download. The honest cost: any validated
+            accuracy figures tied to Microsoft's exact footprint geometries don't transfer to OSM's
+            different polygons - judged an acceptable tradeoff since this project doesn't carry
+            forward a specific validated accuracy claim either way (see below).
+          </li>
+        </ul>
       </section>
 
       <section id="known-limitations">
