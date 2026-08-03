@@ -5,7 +5,7 @@ export const PRIORITY_SCORE_HELP =
   "A weighted score combining building exposure, fire scale, containment, and fire-weather warnings - relative to today's fires, not an absolute rating. See Reference for the formula."
 
 export const POPULATION_HELP =
-  'Census population, weighted by mapped buildings within the buffer - shown for reference only, not used in the priority score, since building counts are considered the more reliable signal. See Reference for methodology.'
+  'Census population within 2.4km of the fire perimeter, weighted by mapped buildings - shown for reference only, not used in the priority score, since building counts are considered the more reliable signal. See Reference for methodology.'
 
 export const COMPLEXITY_HELP =
   'NIMS incident complexity typing - Type 1 is the largest/most complex, Type 5 the smallest (counterintuitively numbered). See Reference for the full scale.'
