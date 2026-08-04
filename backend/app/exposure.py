@@ -133,10 +133,19 @@ def _compute_population_by_band(
     """Best-effort: population is an enhancement over the building counts,
     not something worth losing a fire's whole exposure computation over.
     Returns all-None (not raised) if no API key is configured yet, or if
-    any Census/Overpass call in this fails for any reason - logged either
-    way. A real per-block-group data gap (zero mapped buildings) is
-    handled by the areal-weighted fallback above, not treated as a
-    failure of the whole cycle."""
+    the Census calls themselves fail - logged either way, since without a
+    population figure at all there's nothing to compute.
+
+    The block-group building-count fetch (below) is handled as a
+    separate, narrower failure: it's a second, much wider Overpass query
+    (the union bbox of every block group overlapping the fire's buffer,
+    which routinely spans a huge area in sparse rural terrain) that fails
+    far more often than the Census calls, and confirmed live to be a
+    genuine Overpass timeout on an oversized query, not a transient blip.
+    Losing it shouldn't throw away population data Census already gave
+    us - every block group falls back to areal weighting instead for
+    this cycle, the same fallback already used per-block-group when zero
+    buildings are mapped there."""
     api_key = get_settings().census_api_key
     if not api_key:
         return {band: None for band in band_buffers}
@@ -144,16 +153,22 @@ def _compute_population_by_band(
     try:
         block_groups = census.fetch_block_groups_in_bbox(min_lat=min_lat, min_lon=min_lon, max_lat=max_lat, max_lon=max_lon)
         population_by_geoid = census.fetch_population_by_geoid(block_groups, api_key)
-        building_counts_by_geoid = _fetch_block_group_building_counts(block_groups, client)
-        return {
-            band: _population_within_buffer_dasymetric(
-                block_groups, population_by_geoid, building_counts_by_geoid, fire_buildings, buffer
-            )
-            for band, buffer in band_buffers.items()
-        }
     except Exception:
-        logger.exception("Census/building population lookup failed - leaving population_est null for this cycle")
+        logger.exception("Census population lookup failed - leaving population_est null for this cycle")
         return {band: None for band in band_buffers}
+
+    try:
+        building_counts_by_geoid = _fetch_block_group_building_counts(block_groups, client)
+    except Exception:
+        logger.exception("Block-group building count fetch failed - falling back to areal weighting for this cycle")
+        building_counts_by_geoid = {}
+
+    return {
+        band: _population_within_buffer_dasymetric(
+            block_groups, population_by_geoid, building_counts_by_geoid, fire_buildings, buffer
+        )
+        for band, buffer in band_buffers.items()
+    }
 
 
 def fires_needing_recompute(session: Session) -> list[Fire]:

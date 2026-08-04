@@ -168,9 +168,8 @@ export function Reference() {
           buildings that actually fall inside a given buffer band - so a fire's buffer clipping a
           mostly-empty corner of a huge rural block group only gets credit for the population
           attributed to whichever real buildings sit inside it, not a share proportional to land
-          area. A block group with zero OSM buildings mapped at all falls back to plain areal
-          weighting instead, since there's nothing to distribute against - this tool is honestly a
-          hybrid, not a clean replacement.
+          area. A block group falls back to plain areal weighting instead whenever real building
+          data for it isn't available - this tool is honestly a hybrid, not a clean replacement.
         </p>
         <p>
           <strong>Real limitations that remain:</strong> not every OSM "building" is a residence -
@@ -182,12 +181,11 @@ export function Reference() {
         </p>
         <p>
           <strong>Population numbers shown throughout this app are for reference only</strong> -
-          they're never used in the priority score (see below). Building counts come from a single
-          real OSM fetch per fire; population additionally depends on a second external API (Census
-          ACS) with real reliability gaps of its own - an outage or rate-limit can leave population
-          temporarily blank for a fire until its next recompute, a failure mode building counts alone
-          don't share. Treat the population figures as an illustrative estimate of scale, not a
-          precise or always-current count.
+          they're never used in the priority score (see below). They depend on an external Census
+          lookup that building counts alone don't need, so they can occasionally come back blank or
+          fall back to the less precise areal method above, in a way building counts don't. Treat
+          the population figures as an illustrative estimate of scale, not a precise or
+          always-current count.
         </p>
       </section>
 
